@@ -155,11 +155,12 @@
         }
 
         .combination-text {
-            font-size: 4rem;
+            font-size: 3.2rem;
             font-weight: 100;
             color: #1a1a1a;
             letter-spacing: -0.03em;
             line-height: 1;
+            min-height: 4rem;
         }
 
         .combination-subtitle {
@@ -346,25 +347,6 @@
             100% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
         }
 
-        /* Task instruction overlay */
-        .task-instruction-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.9);
-            color: white;
-            padding: 2rem 3rem;
-            border-radius: 20px;
-            font-size: 3rem;
-            font-weight: 300;
-            text-align: center;
-            z-index: 150;
-            display: none;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
-        }
-
         /* Trial overlay */
         .trial-overlay {
             display: none;
@@ -421,7 +403,7 @@
 
         /* Final results */
         .final-results {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 4rem 2rem;
             position: relative;
@@ -430,13 +412,149 @@
             min-height: 100vh;
         }
 
-        .results-card {
-            background: white;
-            border-radius: 16px;
-            padding: 3rem;
+        .results-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .results-title {
+            font-size: 4.2rem;
+            color: #1a1a1a;
+            font-weight: 300;
+            letter-spacing: -0.02em;
             margin-bottom: 2rem;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+        }
+
+        .results-summary {
+            font-size: 2rem;
+            color: #666666;
+            font-weight: 400;
+            margin-bottom: 3rem;
+        }
+
+        .hand-results {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            margin-bottom: 4rem;
+        }
+
+        .hand-card {
+            background: white;
+            border-radius: 20px;
+            padding: 2.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
             border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .hand-title {
+            font-size: 2.4rem;
+            font-weight: 600;
+            margin-bottom: 2rem;
+            color: #1a1a1a;
+            text-align: center;
+        }
+
+        .ranking-list {
+            list-style: none;
+        }
+
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            margin-bottom: 0.5rem;
+            border-radius: 12px;
+            background: rgba(247, 247, 247, 0.5);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease;
+        }
+
+        .ranking-item:hover {
+            background: rgba(240, 240, 240, 0.8);
+            transform: translateY(-1px);
+        }
+
+        .ranking-position {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #666666;
+            min-width: 2rem;
+        }
+
+        .ranking-position.top-3 {
+            color: #f59e0b;
+        }
+
+        .ranking-position.first {
+            color: #eab308;
+        }
+
+        .ranking-name {
+            flex: 1;
+            font-size: 1.3rem;
+            font-weight: 500;
+            color: #1a1a1a;
+            margin-left: 1rem;
+        }
+
+        .ranking-time {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #3b82f6;
+        }
+
+        .ranking-accuracy {
+            font-size: 1.1rem;
+            color: #22c55e;
+            margin-left: 1rem;
+        }
+
+        .overall-stats {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .overall-title {
+            font-size: 2.8rem;
+            font-weight: 300;
+            margin-bottom: 2rem;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-value {
+            font-size: 2.4rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            flex-wrap: wrap;
         }
 
         /* Responsive design */
@@ -451,11 +569,15 @@
             }
             
             .combination-text {
-                font-size: 3.5rem;
+                font-size: 2.8rem;
             }
             
             .hand-instruction {
                 font-size: 2.2rem;
+            }
+
+            .hand-results {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -485,7 +607,7 @@
             }
             
             .combination-text {
-                font-size: 3rem;
+                font-size: 2.4rem;
             }
             
             .instructions {
@@ -494,6 +616,18 @@
             
             .trial-overlay-title {
                 font-size: 3.5rem;
+            }
+
+            .results-title {
+                font-size: 3rem;
+            }
+
+            .hand-results {
+                grid-template-columns: 1fr;
+            }
+
+            .stat-grid {
+                grid-template-columns: 1fr 1fr;
             }
         }
 
@@ -628,11 +762,6 @@
                         </div>
                     </div>
 
-                    <!-- Task instruction overlay -->
-                    <div id="task-instruction" class="task-instruction-overlay">
-                        Touch <span id="target-fingers">Index</span> to Thumb
-                    </div>
-
                     <div id="countdown" class="countdown" style="display: none;"></div>
                 </div>
             </div>
@@ -698,7 +827,14 @@
         let touchingFingers = new Set();
         let lastCorrectTime = 0;
         let currentCombination = null;
-        let showingInstruction = false;
+        let combinationStartTime = 0;
+        let wrongTouchCount = 0;
+        let detectionFrames = [];
+
+        // Enhanced touch detection parameters
+        const TOUCH_THRESHOLD = 0.06; // More precise threshold
+        const MIN_DETECTION_FRAMES = 3; // Must detect touch for multiple frames
+        const ACCURACY_BONUS_THRESHOLD = 2; // Max wrong touches for accuracy bonus
 
         // Initialize MediaPipe Hands
         function initializeHands() {
@@ -711,8 +847,8 @@
             hands.setOptions({
                 maxNumHands: 1,
                 modelComplexity: 1,
-                minDetectionConfidence: 0.7,
-                minTrackingConfidence: 0.7
+                minDetectionConfidence: 0.8, // Higher confidence for better accuracy
+                minTrackingConfidence: 0.8
             });
 
             hands.onResults(onHandsResults);
@@ -911,45 +1047,105 @@
 
             const thumbTip = landmarks[FINGER_LANDMARKS.THUMB_TIP];
             const currentlyTouching = new Set();
-            const TOUCH_THRESHOLD = 0.08;
 
-            // Check which fingers are touching the thumb
+            // Enhanced detection with multiple frame validation
             const allFingerTips = [FINGER_LANDMARKS.INDEX_TIP, FINGER_LANDMARKS.MIDDLE_TIP, 
                                  FINGER_LANDMARKS.RING_TIP, FINGER_LANDMARKS.PINKY_TIP];
 
             allFingerTips.forEach(fingerLandmark => {
                 const fingerTip = landmarks[fingerLandmark];
-                const distance = Math.sqrt(
+                
+                // 3D distance calculation with depth consideration
+                const distance3D = Math.sqrt(
                     Math.pow((thumbTip.x - fingerTip.x), 2) +
                     Math.pow((thumbTip.y - fingerTip.y), 2) +
-                    Math.pow((thumbTip.z - fingerTip.z) * 0.5, 2)
+                    Math.pow((thumbTip.z - fingerTip.z) * 0.3, 2) // Reduced z-weight for more reliable detection
                 );
+
+                // 2D distance as backup
+                const distance2D = Math.sqrt(
+                    Math.pow((thumbTip.x - fingerTip.x), 2) +
+                    Math.pow((thumbTip.y - fingerTip.y), 2)
+                );
+
+                // Use the more reliable distance measure
+                const distance = Math.min(distance3D, distance2D);
 
                 if (distance < TOUCH_THRESHOLD) {
                     currentlyTouching.add(fingerLandmark);
                 }
             });
 
+            // Store detection frame data for validation
+            detectionFrames.push({
+                timestamp: Date.now(),
+                touching: new Set(currentlyTouching)
+            });
+
+            // Keep only recent frames (last 150ms)
+            const cutoffTime = Date.now() - 150;
+            detectionFrames = detectionFrames.filter(frame => frame.timestamp > cutoffTime);
+
+            // Validate touch with frame consistency
+            const validatedTouching = validateTouchDetection(currentlyTouching);
+
+            // Track wrong touches
+            const requiredFingers = new Set(currentCombination.fingers);
+            validatedTouching.forEach(finger => {
+                if (!requiredFingers.has(finger) && !touchingFingers.has(finger)) {
+                    wrongTouchCount++;
+                }
+            });
+
             // Draw finger visualizations with feedback
-            drawFingerVisualization(landmarks, canvasElement, currentlyTouching);
+            drawFingerVisualization(landmarks, canvasElement, validatedTouching);
 
             // Check if the correct combination is being touched
-            const requiredFingers = new Set(currentCombination.fingers);
             const correctCombination = 
-                currentlyTouching.size === requiredFingers.size &&
-                [...currentlyTouching].every(finger => requiredFingers.has(finger));
+                validatedTouching.size === requiredFingers.size &&
+                [...validatedTouching].every(finger => requiredFingers.has(finger)) &&
+                requiredFingers.size > 0; // Ensure it's not an empty combination
 
-            if (correctCombination && currentlyTouching.size === requiredFingers.size) {
+            // Special case for "Thumb Only" combination
+            if (currentCombination.name === "Thumb Only" && validatedTouching.size === 0) {
                 const currentTime = Date.now();
-                if (currentTime - lastCorrectTime > 500) { // Debounce
+                if (currentTime - lastCorrectTime > 800) { // Longer delay for thumb-only
                     lastCorrectTime = currentTime;
                     setTimeout(() => {
                         nextCombination();
                     }, 300);
                 }
+            } else if (correctCombination && validatedTouching.size === requiredFingers.size) {
+                const currentTime = Date.now();
+                if (currentTime - lastCorrectTime > 400) { // Reduced debounce for faster response
+                    lastCorrectTime = currentTime;
+                    setTimeout(() => {
+                        nextCombination();
+                    }, 200);
+                }
             }
 
-            touchingFingers = currentlyTouching;
+            touchingFingers = validatedTouching;
+        }
+
+        function validateTouchDetection(currentTouching) {
+            // Require detection in at least MIN_DETECTION_FRAMES recent frames
+            const validated = new Set();
+            
+            currentTouching.forEach(finger => {
+                let detectionCount = 0;
+                detectionFrames.forEach(frame => {
+                    if (frame.touching.has(finger)) {
+                        detectionCount++;
+                    }
+                });
+                
+                if (detectionCount >= MIN_DETECTION_FRAMES) {
+                    validated.add(finger);
+                }
+            });
+            
+            return validated;
         }
 
         function drawFingerVisualization(landmarks, canvasElement, currentlyTouching) {
@@ -967,7 +1163,7 @@
                 let strokeColor = '#ffffff';
                 let radius = 12;
 
-                // Thumb is always highlighted
+                // Thumb is always highlighted during task
                 if (landmark === FINGER_LANDMARKS.THUMB_TIP) {
                     fillColor = 'rgba(59, 130, 246, 0.8)'; // Blue for thumb
                     strokeColor = '#3b82f6';
@@ -997,22 +1193,38 @@
                 canvasCtx.strokeStyle = strokeColor;
                 canvasCtx.lineWidth = 3;
                 
+                // Add shadow for better visibility
+                canvasCtx.shadowBlur = 4;
+                canvasCtx.shadowColor = strokeColor;
+                
                 canvasCtx.beginPath();
                 canvasCtx.arc(tip.x * canvasElement.width, tip.y * canvasElement.height, radius, 0, 2 * Math.PI);
                 canvasCtx.fill();
                 canvasCtx.stroke();
+                
+                canvasCtx.shadowBlur = 0;
             });
         }
 
         function nextCombination() {
-            // Record result
+            // Calculate comprehensive result metrics
+            const completionTime = Date.now() - combinationStartTime;
+            const accuracyScore = Math.max(0, 100 - (wrongTouchCount * 10)); // 10% penalty per wrong touch
+            const speedScore = Math.max(0, 100 - Math.max(0, (completionTime - 1000) / 50)); // Penalty after 1 second
+            const overallScore = (accuracyScore + speedScore) / 2;
+
             const result = {
                 handIndex: currentHandIndex,
                 hand: trialConditions[currentHandIndex].hand,
                 combinationIndex: currentCombinationIndex,
                 combination: currentCombination,
                 timestamp: new Date().toISOString(),
-                completionTime: Date.now() - startTime
+                completionTime: completionTime,
+                wrongTouchCount: wrongTouchCount,
+                accuracyScore: accuracyScore,
+                speedScore: speedScore,
+                overallScore: overallScore,
+                difficulty: getDifficultyScore(currentCombination)
             };
             
             allResults.push(result);
@@ -1033,25 +1245,33 @@
                     updateConditionUI();
                 }
             } else {
-                // Next combination for same hand
-                showNextCombination();
+                // Next combination for same hand - 1 second delay
+                setTimeout(() => {
+                    showNextCombination();
+                }, 1000);
             }
+        }
+
+        function getDifficultyScore(combination) {
+            // Assign difficulty scores based on complexity
+            const fingerCount = combination.fingers.length;
+            if (fingerCount === 0) return 1; // Thumb only
+            if (fingerCount === 1) return 2; // Single finger
+            if (fingerCount === 2) return 3; // Two fingers
+            if (fingerCount === 3) return 4; // Three fingers
+            if (fingerCount === 4) return 5; // All four fingers
+            return 3; // Default
         }
 
         function showNextCombination() {
             currentCombination = FINGER_COMBINATIONS[currentCombinationIndex];
+            combinationStartTime = Date.now();
+            wrongTouchCount = 0;
+            detectionFrames = [];
+            
+            // Update UI
             document.getElementById('progress-display').textContent = `${currentCombinationIndex + 1}/16`;
-            
-            // Show instruction overlay
-            const taskInstruction = document.getElementById('task-instruction');
-            const targetFingers = document.getElementById('target-fingers');
-            
-            targetFingers.textContent = currentCombination.name;
-            taskInstruction.style.display = 'block';
-            
-            setTimeout(() => {
-                taskInstruction.style.display = 'none';
-            }, 2000);
+            document.getElementById('combination-text').textContent = currentCombination.name;
         }
 
         function startRecording() {
@@ -1110,10 +1330,10 @@
             document.getElementById('hand-outline').style.display = 'none';
             
             recording = true; 
-            startTime = Date.now();
             frameCount = 0;
             touchingFingers = new Set();
             lastCorrectTime = 0;
+            detectionFrames = [];
             
             // Show first combination
             showNextCombination();
@@ -1123,7 +1343,6 @@
             recording = false;
             document.getElementById('hand-guide-overlay').style.display = 'block';
             document.getElementById('hand-outline').style.display = 'block';
-            document.getElementById('task-instruction').style.display = 'none';
             
             const positionStatus = document.getElementById('position-status');
             positionStatus.textContent = 'Ready for next trial';
@@ -1165,7 +1384,6 @@
             currentCombinationIndex = 0;
             document.getElementById('progress-display').textContent = '1/16';
             document.getElementById('combination-text').textContent = 'Ready';
-            document.getElementById('target-fingers').textContent = 'Press Space';
             
             const positionStatus = document.getElementById('position-status');
             positionStatus.textContent = 'Position hand in view';
@@ -1176,66 +1394,152 @@
             document.getElementById('page-webcam').style.display = 'none';
             document.getElementById('finalResults').style.display = 'block';
             
-            // Calculate results
+            // Comprehensive analysis
             const rightResults = allResults.filter(r => r.hand === 'right');
             const leftResults = allResults.filter(r => r.hand === 'left');
+            
+            // Create rankings for each hand
+            const rightRanking = createRanking(rightResults);
+            const leftRanking = createRanking(leftResults);
+            
+            // Calculate overall statistics
+            const overallStats = calculateOverallStats(allResults);
+            
+            generateResultsHTML(rightRanking, leftRanking, overallStats);
+
+            // Save comprehensive results to database
+            saveResultsToDatabase(allResults, overallStats);
+        }
+
+        function createRanking(results) {
+            return results
+                .map(result => ({
+                    ...result,
+                    // Composite ranking score: speed (40%) + accuracy (40%) + consistency (20%)
+                    rankingScore: (result.speedScore * 0.4) + (result.accuracyScore * 0.4) + 
+                                (100 - (result.completionTime / 100)) * 0.2
+                }))
+                .sort((a, b) => b.rankingScore - a.rankingScore);
+        }
+
+        function calculateOverallStats(results) {
+            const rightResults = results.filter(r => r.hand === 'right');
+            const leftResults = results.filter(r => r.hand === 'left');
+            
+            const avgTime = results.reduce((sum, r) => sum + r.completionTime, 0) / results.length;
+            const avgAccuracy = results.reduce((sum, r) => sum + r.accuracyScore, 0) / results.length;
+            const totalWrongTouches = results.reduce((sum, r) => sum + r.wrongTouchCount, 0);
             
             const rightAvgTime = rightResults.reduce((sum, r) => sum + r.completionTime, 0) / rightResults.length;
             const leftAvgTime = leftResults.reduce((sum, r) => sum + r.completionTime, 0) / leftResults.length;
             
+            const fastestCombination = results.reduce((fastest, current) => 
+                current.completionTime < fastest.completionTime ? current : fastest);
+            
+            const mostAccurate = results.reduce((accurate, current) => 
+                current.accuracyScore > accurate.accuracyScore ? current : accurate);
+
+            return {
+                avgTime: avgTime,
+                avgAccuracy: avgAccuracy,
+                totalWrongTouches: totalWrongTouches,
+                rightAvgTime: rightAvgTime,
+                leftAvgTime: leftAvgTime,
+                fastestCombination: fastestCombination,
+                mostAccurate: mostAccurate,
+                totalCombinations: results.length
+            };
+        }
+
+        function generateResultsHTML(rightRanking, leftRanking, stats) {
             let html = `
-                <div style="max-width: 1000px; margin: 0 auto; padding: 2rem 3rem; text-align: center; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; justify-content: center;">
-                    <div style="margin-bottom: 5rem;">
-                        <h1 style="font-size: 4.2rem; color: #1a1a1a; line-height: 1.3; margin-bottom: 3rem; font-weight: 300; letter-spacing: -0.02em;">
-                            Finger Combination Assessment Complete
-                        </h1>
-                        
-                        <p style="font-size: 2.4rem; color: #1a1a1a; line-height: 1.3; margin-bottom: 2rem; font-weight: 300;">
-                            <strong style="font-weight: 700;">Right hand</strong> average time: <strong style="font-weight: 700;">${(rightAvgTime/1000).toFixed(1)}s</strong> per combination
-                        </p>
-                        
-                        <p style="font-size: 2.4rem; color: #1a1a1a; line-height: 1.3; font-weight: 300;">
-                            <strong style="font-weight: 700;">Left hand</strong> average time: <strong style="font-weight: 700;">${(leftAvgTime/1000).toFixed(1)}s</strong> per combination
-                        </p>
-                    </div>
-                    
-                    <div style="display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;">
-                        <button onclick="location.reload()" style="background-color: #000000; color: white; border: none; padding: 1.5rem 3rem; font-size: 1.3rem; font-weight: 500; border-radius: 60px; cursor: pointer; transition: all 0.2s ease; font-family: 'Inter', sans-serif;">
-                            Take Test Again
-                        </button>
-                        <button onclick="shareResults()" style="background-color: transparent; color: #000000; border: 2px solid #000000; padding: 1.5rem 3rem; font-size: 1.3rem; font-weight: 500; border-radius: 60px; cursor: pointer; transition: all 0.2s ease; font-family: 'Inter', sans-serif;">
-                            Share Results
-                        </button>
+                <div class="results-header">
+                    <h1 class="results-title">Finger Combination Assessment Complete</h1>
+                    <p class="results-summary">Completed ${stats.totalCombinations} combinations across both hands</p>
+                </div>
+
+                <div class="overall-stats">
+                    <h2 class="overall-title">Overall Performance</h2>
+                    <div class="stat-grid">
+                        <div class="stat-item">
+                            <div class="stat-value">${(stats.avgTime/1000).toFixed(1)}s</div>
+                            <div class="stat-label">Average Time</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${stats.avgAccuracy.toFixed(1)}%</div>
+                            <div class="stat-label">Average Accuracy</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${(stats.fastestCombination.completionTime/1000).toFixed(1)}s</div>
+                            <div class="stat-label">Fastest Combination</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${stats.totalWrongTouches}</div>
+                            <div class="stat-label">Total Wrong Touches</div>
+                        </div>
                     </div>
                 </div>
-            `;
-                        
-            document.getElementById('finalResults').innerHTML = html;
 
-            // Save results to database
+                <div class="hand-results">
+                    ${generateHandRankingHTML('Right Hand', rightRanking)}
+                    ${generateHandRankingHTML('Left Hand', leftRanking)}
+                </div>
+
+                <div class="action-buttons">
+                    <button onclick="location.reload()" style="background-color: #000000; color: white; border: none; padding: 1.5rem 3rem; font-size: 1.3rem; font-weight: 500; border-radius: 60px; cursor: pointer; transition: all 0.2s ease; font-family: 'Inter', sans-serif;">
+                        Take Test Again
+                    </button>
+                    <button onclick="shareResults()" style="background-color: transparent; color: #000000; border: 2px solid #000000; padding: 1.5rem 3rem; font-size: 1.3rem; font-weight: 500; border-radius: 60px; cursor: pointer; transition: all 0.2s ease; font-family: 'Inter', sans-serif;">
+                        Share Results
+                    </button>
+                </div>
+            `;
+            
+            document.getElementById('finalResults').innerHTML = html;
+        }
+
+        function generateHandRankingHTML(handTitle, ranking) {
+            const listItems = ranking.map((result, index) => {
+                const position = index + 1;
+                const positionClass = position === 1 ? 'first' : (position <= 3 ? 'top-3' : '');
+                
+                return `
+                    <li class="ranking-item">
+                        <span class="ranking-position ${positionClass}">${position}</span>
+                        <span class="ranking-name">${result.combination.name}</span>
+                        <span class="ranking-time">${(result.completionTime/1000).toFixed(1)}s</span>
+                        <span class="ranking-accuracy">${result.accuracyScore.toFixed(0)}%</span>
+                    </li>
+                `;
+            }).join('');
+
+            return `
+                <div class="hand-card">
+                    <h3 class="hand-title">${handTitle}</h3>
+                    <ul class="ranking-list">
+                        ${listItems}
+                    </ul>
+                </div>
+            `;
+        }
+
+        function saveResultsToDatabase(results, stats) {
             db.collection("FingerCombinationResults")
                 .doc(participantID)
                 .set({
                     completedAt: new Date().toISOString(),
-                    allResults: allResults,
-                    summary: {
-                        rightHandAvgTime: rightAvgTime,
-                        leftHandAvgTime: leftAvgTime,
-                        totalCombinations: allResults.length
-                    }
+                    allResults: results,
+                    overallStats: stats,
+                    participantID: participantID
                 })
-                .then(() => console.log("Finger combination results saved"))
+                .then(() => console.log("Comprehensive finger combination results saved"))
                 .catch(err => console.error("Error saving results:", err));
         }
 
         function shareResults() {
-            const rightResults = allResults.filter(r => r.hand === 'right');
-            const leftResults = allResults.filter(r => r.hand === 'left');
+            const stats = calculateOverallStats(allResults);
             
-            const rightAvgTime = rightResults.reduce((sum, r) => sum + r.completionTime, 0) / rightResults.length;
-            const leftAvgTime = leftResults.reduce((sum, r) => sum + r.completionTime, 0) / leftResults.length;
-            
-            const shareText = `🧠 Just completed a finger combination assessment!\n\n⚡ Right hand: ${(rightAvgTime/1000).toFixed(1)}s avg per combination\n⚡ Left hand: ${(leftAvgTime/1000).toFixed(1)}s avg per combination\n🎯 Completed all 16 combinations per hand\n\nTry it yourself! 👆`;
+            const shareText = `🧠 Just completed a comprehensive finger combination assessment!\n\n⚡ Average time: ${(stats.avgTime/1000).toFixed(1)}s per combination\n🎯 Average accuracy: ${stats.avgAccuracy.toFixed(1)}%\n🏆 Fastest combination: ${(stats.fastestCombination.completionTime/1000).toFixed(1)}s\n📊 Completed ${stats.totalCombinations} combinations\n\nTry it yourself! 👆`;
             
             navigator.clipboard.writeText(shareText).then(() => {
                 alert('Results copied to clipboard!');
