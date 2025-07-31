@@ -1607,10 +1607,15 @@ button, input[type="submit"], .btn {
                         </p>
                     </div>
                     
-                    <div style="display: flex; gap: 2rem; justify-content: center;">
+                    <div style="display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;">
                         <button onclick="location.reload()" style="background-color: #000000; color: white; border: none; padding: 1.5rem 3rem; font-size: 1.3rem; font-weight: 500; border-radius: 60px; cursor: pointer; transition: all 0.2s ease; font-family: 'Inter', sans-serif;">
                             Take Test Again
                         </button>
+                        
+                        <button onclick="goToFingerCombinationTest()" style="background-color: #3b82f6; color: white; border: none; padding: 1.5rem 3rem; font-size: 1.3rem; font-weight: 500; border-radius: 60px; cursor: pointer; transition: all 0.2s ease; font-family: 'Inter', sans-serif;">
+                            Next: Finger Combinations
+                        </button>
+                        
                         <button onclick="shareResults()" style="background-color: transparent; color: #000000; border: 2px solid #000000; padding: 1.5rem 3rem; font-size: 1.3rem; font-weight: 500; border-radius: 60px; cursor: pointer; transition: all 0.2s ease; font-family: 'Inter', sans-serif;">
                             Share Results
                         </button>
@@ -1686,6 +1691,13 @@ button, input[type="submit"], .btn {
             const percentile = Math.round(Math.max(1, Math.min(99, (0.5 * (1 + erf(zScore / Math.sqrt(2)))) * 100)));
             
             showShareOptions(rightTapsPerRound, leftTapsPerRound, percentile, avgTapsPerTenSec);
+        }
+        function goToFingerCombinationTest() {
+            // If you're serving these as separate HTML files:
+            window.location.href = 'finger-combination-test.html';
+            
+            // Or if you want to open in a new tab:
+            // window.open('finger-combination-test.html', '_blank');
         }
         
         function showShareOptions(rightTaps, leftTaps, percentile, avgTaps) {
