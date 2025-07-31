@@ -832,6 +832,8 @@
         let detectionFrames = [];
         let combinationCompleted = false;
         let completedFingers = new Set();
+        let fingerPositionData = [];
+        let nonTargetFingerMovements = 0;
 
         // Enhanced touch detection parameters
         const TOUCH_THRESHOLD = 0.06; // More precise threshold
@@ -1054,28 +1056,47 @@
             const allFingerTips = [FINGER_LANDMARKS.INDEX_TIP, FINGER_LANDMARKS.MIDDLE_TIP, 
                                  FINGER_LANDMARKS.RING_TIP, FINGER_LANDMARKS.PINKY_TIP];
 
+            // Track finger independence - detect unwanted movements in non-target fingers
+            const requiredFingers = new Set(currentCombination.fingers);
             allFingerTips.forEach(fingerLandmark => {
                 const fingerTip = landmarks[fingerLandmark];
                 
-                // 3D distance calculation with depth consideration
+                // Calculate distance from thumb for all fingers
                 const distance3D = Math.sqrt(
                     Math.pow((thumbTip.x - fingerTip.x), 2) +
                     Math.pow((thumbTip.y - fingerTip.y), 2) +
-                    Math.pow((thumbTip.z - fingerTip.z) * 0.3, 2) // Reduced z-weight for more reliable detection
+                    Math.pow((thumbTip.z - fingerTip.z) * 0.3, 2)
                 );
 
-                // 2D distance as backup
                 const distance2D = Math.sqrt(
                     Math.pow((thumbTip.x - fingerTip.x), 2) +
                     Math.pow((thumbTip.y - fingerTip.y), 2)
                 );
 
-                // Use the more reliable distance measure
                 const distance = Math.min(distance3D, distance2D);
 
                 if (distance < TOUCH_THRESHOLD) {
                     currentlyTouching.add(fingerLandmark);
                 }
+
+                // Track unwanted movements in non-target fingers
+                if (!requiredFingers.has(fingerLandmark) && distance < 0.12) {
+                    nonTargetFingerMovements++;
+                }
+            });
+
+            // Store finger position data for analysis
+            fingerPositionData.push({
+                timestamp: Date.now() - combinationStartTime,
+                fingerPositions: allFingerTips.map(landmark => ({
+                    landmark: landmark,
+                    distanceFromThumb: Math.sqrt(
+                        Math.pow((thumbTip.x - landmarks[landmark].x), 2) +
+                        Math.pow((thumbTip.y - landmarks[landmark].y), 2)
+                    ),
+                    isTarget: requiredFingers.has(landmark),
+                    isTouching: currentlyTouching.has(landmark)
+                }))
             });
 
             // Store detection frame data for validation
@@ -1092,7 +1113,6 @@
             const validatedTouching = validateTouchDetection(currentlyTouching);
 
             // Track wrong touches
-            const requiredFingers = new Set(currentCombination.fingers);
             validatedTouching.forEach(finger => {
                 if (!requiredFingers.has(finger) && !touchingFingers.has(finger)) {
                     wrongTouchCount++;
@@ -1231,11 +1251,18 @@
         }
 
         function nextCombination() {
+            // Calculate finger independence score
+            const independenceScore = Math.max(0, 100 - (nonTargetFingerMovements / 10)); // Penalty for unwanted movements
+            
             // Calculate comprehensive result metrics
             const completionTime = Date.now() - combinationStartTime;
-            const accuracyScore = Math.max(0, 100 - (wrongTouchCount * 10)); // 10% penalty per wrong touch
-            const speedScore = Math.max(0, 100 - Math.max(0, (completionTime - 1000) / 50)); // Penalty after 1 second
-            const overallScore = (accuracyScore + speedScore) / 2;
+            const accuracyScore = Math.max(0, 100 - (wrongTouchCount * 15)); // 15% penalty per wrong touch
+            const speedScore = Math.max(0, 100 - Math.max(0, (completionTime - 800) / 40)); // Penalty after 0.8 seconds
+            
+            // Advanced ranking formula
+            const baseScore = (accuracyScore * 0.4) + (speedScore * 0.3) + (independenceScore * 0.3);
+            const difficultyMultiplier = getDifficultyScore(currentCombination) / 3; // Normalize difficulty
+            const overallScore = baseScore * difficultyMultiplier;
 
             const result = {
                 handIndex: currentHandIndex,
@@ -1245,10 +1272,13 @@
                 timestamp: new Date().toISOString(),
                 completionTime: completionTime,
                 wrongTouchCount: wrongTouchCount,
+                nonTargetMovements: nonTargetFingerMovements,
                 accuracyScore: accuracyScore,
                 speedScore: speedScore,
+                independenceScore: independenceScore,
                 overallScore: overallScore,
-                difficulty: getDifficultyScore(currentCombination)
+                difficulty: getDifficultyScore(currentCombination),
+                fingerPositionData: fingerPositionData.slice() // Copy the data
             };
             
             allResults.push(result);
@@ -1291,7 +1321,9 @@
             currentCombination = FINGER_COMBINATIONS[currentCombinationIndex];
             combinationStartTime = Date.now();
             wrongTouchCount = 0;
+            nonTargetFingerMovements = 0;
             detectionFrames = [];
+            fingerPositionData = [];
             combinationCompleted = false; // Reset completion state
             completedFingers = new Set(); // Reset completed fingers
             
@@ -1360,6 +1392,8 @@
             touchingFingers = new Set();
             lastCorrectTime = 0;
             detectionFrames = [];
+            fingerPositionData = [];
+            nonTargetFingerMovements = 0;
             combinationCompleted = false; // Reset completion state
             completedFingers = new Set(); // Reset completed fingers
             
@@ -1441,112 +1475,128 @@
 
         function createRanking(results) {
             return results
-                .map(result => ({
-                    ...result,
-                    // Composite ranking score: speed (40%) + accuracy (40%) + consistency (20%)
-                    rankingScore: (result.speedScore * 0.4) + (result.accuracyScore * 0.4) + 
-                                (100 - (result.completionTime / 100)) * 0.2
-                }))
+                .map(result => {
+                    // Advanced ranking score: accuracy (40%) + speed (30%) + independence (30%)
+                    const rankingScore = result.overallScore;
+                    return { ...result, rankingScore };
+                })
                 .sort((a, b) => b.rankingScore - a.rankingScore);
         }
 
-        function calculateOverallStats(results) {
-            const rightResults = results.filter(r => r.hand === 'right');
-            const leftResults = results.filter(r => r.hand === 'left');
-            
-            const avgTime = results.reduce((sum, r) => sum + r.completionTime, 0) / results.length;
-            const avgAccuracy = results.reduce((sum, r) => sum + r.accuracyScore, 0) / results.length;
-            const totalWrongTouches = results.reduce((sum, r) => sum + r.wrongTouchCount, 0);
-            
-            const rightAvgTime = rightResults.reduce((sum, r) => sum + r.completionTime, 0) / rightResults.length;
-            const leftAvgTime = leftResults.reduce((sum, r) => sum + r.completionTime, 0) / leftResults.length;
-            
-            const fastestCombination = results.reduce((fastest, current) => 
-                current.completionTime < fastest.completionTime ? current : fastest);
-            
-            const mostAccurate = results.reduce((accurate, current) => 
-                current.accuracyScore > accurate.accuracyScore ? current : accurate);
-
-            return {
-                avgTime: avgTime,
-                avgAccuracy: avgAccuracy,
-                totalWrongTouches: totalWrongTouches,
-                rightAvgTime: rightAvgTime,
-                leftAvgTime: leftAvgTime,
-                fastestCombination: fastestCombination,
-                mostAccurate: mostAccurate,
-                totalCombinations: results.length
-            };
-        }
-
-        function generateResultsHTML(rightRanking, leftRanking, stats) {
+        function generateResultsHTML(rightRanking, leftRanking) {
             let html = `
-                <div class="results-header">
-                    <h1 class="results-title">Finger Combination Assessment Complete</h1>
-                    <p class="results-summary">Completed ${stats.totalCombinations} combinations across both hands</p>
-                </div>
-
-                <div class="overall-stats">
-                    <h2 class="overall-title">Overall Performance</h2>
-                    <div class="stat-grid">
-                        <div class="stat-item">
-                            <div class="stat-value">${(stats.avgTime/1000).toFixed(1)}s</div>
-                            <div class="stat-label">Average Time</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${stats.avgAccuracy.toFixed(1)}%</div>
-                            <div class="stat-label">Average Accuracy</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${(stats.fastestCombination.completionTime/1000).toFixed(1)}s</div>
-                            <div class="stat-label">Fastest Combination</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${stats.totalWrongTouches}</div>
-                            <div class="stat-label">Total Wrong Touches</div>
-                        </div>
+                <div style="max-width: 1200px; margin: 0 auto; padding: 2rem; font-family: 'Inter', sans-serif; height: 100vh; display: flex; flex-direction: column;">
+                    
+                    <!-- Header -->
+                    <div style="text-align: center; margin-bottom: 2rem;">
+                        <h1 style="font-size: 3.5rem; color: #1a1a1a; font-weight: 300; margin-bottom: 1rem; letter-spacing: -0.02em;">
+                            Finger Combination Results
+                        </h1>
+                        <p style="font-size: 1.4rem; color: #666666; font-weight: 400;">
+                            Ranked by speed, accuracy, and finger independence
+                        </p>
                     </div>
-                </div>
 
-                <div class="hand-results">
-                    ${generateHandRankingHTML('Right Hand', rightRanking)}
-                    ${generateHandRankingHTML('Left Hand', leftRanking)}
-                </div>
+                    <!-- Results Grid -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; flex: 1; max-height: 70vh;">
+                        ${generateMinimalHandRankingHTML('Right Hand', rightRanking)}
+                        ${generateMinimalHandRankingHTML('Left Hand', leftRanking)}
+                    </div>
 
-                <div class="action-buttons">
-                    <button onclick="location.reload()" style="background-color: #000000; color: white; border: none; padding: 1.5rem 3rem; font-size: 1.3rem; font-weight: 500; border-radius: 60px; cursor: pointer; transition: all 0.2s ease; font-family: 'Inter', sans-serif;">
-                        Take Test Again
-                    </button>
-                    <button onclick="shareResults()" style="background-color: transparent; color: #000000; border: 2px solid #000000; padding: 1.5rem 3rem; font-size: 1.3rem; font-weight: 500; border-radius: 60px; cursor: pointer; transition: all 0.2s ease; font-family: 'Inter', sans-serif;">
-                        Share Results
-                    </button>
+                    <!-- Action Buttons -->
+                    <div style="display: flex; gap: 2rem; justify-content: center; margin-top: 2rem;">
+                        <button onclick="location.reload()" style="background-color: #000000; color: white; border: none; padding: 1rem 2rem; font-size: 1.2rem; font-weight: 500; border-radius: 50px; cursor: pointer; transition: all 0.2s ease; font-family: 'Inter', sans-serif;">
+                            Test Again
+                        </button>
+                        <button onclick="shareResults()" style="background-color: transparent; color: #000000; border: 2px solid #000000; padding: 1rem 2rem; font-size: 1.2rem; font-weight: 500; border-radius: 50px; cursor: pointer; transition: all 0.2s ease; font-family: 'Inter', sans-serif;">
+                            Share Results
+                        </button>
+                    </div>
                 </div>
             `;
             
             document.getElementById('finalResults').innerHTML = html;
         }
 
-        function generateHandRankingHTML(handTitle, ranking) {
+        function generateMinimalHandRankingHTML(handTitle, ranking) {
             const listItems = ranking.map((result, index) => {
                 const position = index + 1;
-                const positionClass = position === 1 ? 'first' : (position <= 3 ? 'top-3' : '');
+                const bgColor = position === 1 ? 'rgba(34, 197, 94, 0.08)' : 
+                               position <= 3 ? 'rgba(59, 130, 246, 0.06)' : 
+                               'rgba(247, 247, 247, 0.8)';
                 
+                const borderColor = position === 1 ? '#22c55e' : 
+                                  position <= 3 ? '#3b82f6' : 
+                                  'rgba(0, 0, 0, 0.05)';
+
                 return `
-                    <li class="ranking-item">
-                        <span class="ranking-position ${positionClass}">${position}</span>
-                        <span class="ranking-name">${result.combination.name}</span>
-                        <span class="ranking-time">${(result.completionTime/1000).toFixed(1)}s</span>
-                        <span class="ranking-accuracy">${result.accuracyScore.toFixed(0)}%</span>
-                    </li>
+                    <div style="
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: space-between; 
+                        padding: 0.8rem 1.2rem; 
+                        margin-bottom: 0.4rem; 
+                        border-radius: 10px; 
+                        background: ${bgColor}; 
+                        border: 1px solid ${borderColor};
+                        transition: all 0.2s ease;
+                    ">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <span style="
+                                font-size: 1.1rem; 
+                                font-weight: 700; 
+                                color: ${position === 1 ? '#22c55e' : position <= 3 ? '#3b82f6' : '#666666'}; 
+                                min-width: 1.5rem;
+                            ">${position}</span>
+                            <span style="
+                                font-size: 1.1rem; 
+                                font-weight: 500; 
+                                color: #1a1a1a;
+                                flex: 1;
+                            ">${result.combination.name}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 1rem; font-size: 0.95rem;">
+                            <span style="color: #1a1a1a; font-weight: 600;">${(result.completionTime/1000).toFixed(1)}s</span>
+                            <span style="color: #666666;">${result.accuracyScore.toFixed(0)}%</span>
+                            <span style="color: #666666;">${result.independenceScore.toFixed(0)}%</span>
+                        </div>
+                    </div>
                 `;
             }).join('');
 
             return `
-                <div class="hand-card">
-                    <h3 class="hand-title">${handTitle}</h3>
-                    <ul class="ranking-list">
+                <div style="
+                    background: white; 
+                    border-radius: 16px; 
+                    padding: 1.8rem; 
+                    border: 1px solid rgba(0, 0, 0, 0.05);
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+                    overflow-y: auto;
+                    max-height: 100%;
+                ">
+                    <div style="
+                        display: flex; 
+                        justify-content: space-between; 
+                        align-items: center; 
+                        margin-bottom: 1.5rem; 
+                        padding-bottom: 1rem; 
+                        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+                    ">
+                        <h3 style="
+                            font-size: 1.8rem; 
+                            font-weight: 600; 
+                            color: #1a1a1a; 
+                            margin: 0;
+                        ">${handTitle}</h3>
+                        <div style="display: flex; gap: 1rem; font-size: 0.85rem; color: #666666; text-transform: uppercase; letter-spacing: 0.05em;">
+                            <span>Time</span>
+                            <span>Acc</span>
+                            <span>Ind</span>
+                        </div>
+                    </div>
+                    <div style="overflow-y: auto; max-height: calc(100% - 4rem);">
                         ${listItems}
-                    </ul>
+                    </div>
                 </div>
             `;
         }
@@ -1565,9 +1615,14 @@
         }
 
         function shareResults() {
-            const stats = calculateOverallStats(allResults);
+            const rightResults = allResults.filter(r => r.hand === 'right');
+            const leftResults = allResults.filter(r => r.hand === 'left');
             
-            const shareText = `🧠 Just completed a comprehensive finger combination assessment!\n\n⚡ Average time: ${(stats.avgTime/1000).toFixed(1)}s per combination\n🎯 Average accuracy: ${stats.avgAccuracy.toFixed(1)}%\n🏆 Fastest combination: ${(stats.fastestCombination.completionTime/1000).toFixed(1)}s\n📊 Completed ${stats.totalCombinations} combinations\n\nTry it yourself! 👆`;
+            const rightAvgTime = rightResults.reduce((sum, r) => sum + r.completionTime, 0) / rightResults.length;
+            const leftAvgTime = leftResults.reduce((sum, r) => sum + r.completionTime, 0) / leftResults.length;
+            const avgAccuracy = allResults.reduce((sum, r) => sum + r.accuracyScore, 0) / allResults.length;
+            
+            const shareText = `🧠 Just completed a comprehensive finger combination assessment!\n\n⚡ Right hand avg: ${(rightAvgTime/1000).toFixed(1)}s\n⚡ Left hand avg: ${(leftAvgTime/1000).toFixed(1)}s\n🎯 Overall accuracy: ${avgAccuracy.toFixed(1)}%\n📊 Completed ${allResults.length} combinations\n\nTry it yourself! 👆`;
             
             navigator.clipboard.writeText(shareText).then(() => {
                 alert('Results copied to clipboard!');
