@@ -266,6 +266,31 @@
             transform: scaleX(-1);
         }
 
+        /* Hand outline guide */
+        #hand-outline {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 420px;
+            height: auto;
+            opacity: 0.3;
+            pointer-events: none;
+            z-index: 80;
+            transition: all 0.3s ease;
+            filter: invert(1);
+        }
+
+        .hand-outline-ready {
+            opacity: 0.6 !important;
+            filter: invert(1) drop-shadow(0 0 20px #22c55e);
+        }
+
+        .hand-outline-not-ready {
+            opacity: 0.4 !important;
+            filter: invert(1) drop-shadow(0 0 20px #ef4444);
+        }
+
         /* Hand positioning guide */
         .hand-guide-overlay {
             position: absolute;
@@ -319,6 +344,25 @@
             0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
             50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
             100% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
+        }
+
+        /* Task instruction overlay */
+        .task-instruction-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 2rem 3rem;
+            border-radius: 20px;
+            font-size: 3rem;
+            font-weight: 300;
+            text-align: center;
+            z-index: 150;
+            display: none;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
         }
 
         /* Trial overlay */
@@ -472,6 +516,17 @@
             border-left: none;
         }
 
+        /* Hand outline positioning based on hand */
+        .layout-left-hand #hand-outline {
+            left: 30% !important;
+            transform: translate(-50%, -50%) scaleX(-1);
+        }
+        
+        .layout-right-hand #hand-outline {
+            left: 70% !important;
+            transform: translate(-50%, -50%);
+        }
+        
         /* Hand guide positioning based on hand */
         .layout-left-hand .hand-guide-overlay {
             left: 29% !important;
@@ -479,37 +534,6 @@
         
         .layout-right-hand .hand-guide-overlay {
             left: 72% !important;
-        }
-
-        /* Finger visualization */
-        .finger-circle {
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            border: 3px solid #ffffff;
-            background: rgba(128, 128, 128, 0.7);
-            transform: translate(-50%, -50%);
-            transition: all 0.2s ease;
-            z-index: 150;
-        }
-
-        .finger-circle.target {
-            background: rgba(59, 130, 246, 0.8);
-            border-color: #3b82f6;
-            box-shadow: 0 0 20px rgba(59, 130, 246, 0.6);
-        }
-
-        .finger-circle.correct {
-            background: rgba(34, 197, 94, 0.9);
-            border-color: #22c55e;
-            box-shadow: 0 0 20px rgba(34, 197, 94, 0.6);
-        }
-
-        .finger-circle.wrong {
-            background: rgba(239, 68, 68, 0.9);
-            border-color: #ef4444;
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
         }
     </style>
 
@@ -552,7 +576,7 @@
             <div class="trial-overlay-instruction">
                 Keep fingers <strong>open</strong> and touch the indicated fingers to your <strong>thumb</strong>
             </div>
-            <p class="trial-overlay-footer">Press SPACEBAR to begin</p>
+            <p class="trial-overlay-footer">Press SPACEBAR when ready</p>
         </div>
     </div>
 
@@ -565,8 +589,8 @@
                 <div class="progress-section">
                     <div class="progress-display" id="progress-display">1/16</div>
                     <div class="combination-display">
-                        <div class="combination-text" id="combination-text">Index</div>
-                        <div class="combination-subtitle">TO THUMB</div>
+                        <div class="combination-text" id="combination-text">Ready</div>
+                        <div class="combination-subtitle">PRESS SPACE</div>
                     </div>
                 </div>
                 
@@ -581,8 +605,10 @@
                     <h3>Guidelines</h3>
                     <div class="instruction-item">Keep hand open</div>
                     <div class="instruction-item">Touch specified fingers to thumb</div>
-                    <div class="instruction-item">Green = correct combination</div>
-                    <div class="instruction-item">Red = incorrect touch</div>
+                    <div class="instruction-item">Gray = default</div>
+                    <div class="instruction-item">Blue = target fingers</div>
+                    <div class="instruction-item">Green = correct</div>
+                    <div class="instruction-item">Red = wrong finger</div>
                 </div>
             </div>
 
@@ -592,6 +618,9 @@
                     <video id="inputVideo" autoplay playsinline></video>
                     <canvas id="outputCanvas"></canvas>
 
+                    <!-- Hand outline guide -->
+                    <img id="hand-outline" src="https://raw.githubusercontent.com/ShadowCoder1/pd-video-analyzer/main/download.png" alt="Hand Outline Guide">
+
                     <!-- Hand positioning guide -->
                     <div id="hand-guide-overlay" class="hand-guide-overlay">
                         <div id="position-status" class="position-status">
@@ -599,7 +628,10 @@
                         </div>
                     </div>
 
-                    <!-- Finger circles will be dynamically added here -->
+                    <!-- Task instruction overlay -->
+                    <div id="task-instruction" class="task-instruction-overlay">
+                        Touch <span id="target-fingers">Index</span> to Thumb
+                    </div>
 
                     <div id="countdown" class="countdown" style="display: none;"></div>
                 </div>
@@ -618,6 +650,7 @@
         let frameCount = 0;
         let currentDetectedHand = null;
         window.handPositionCorrect = false;
+        let countdownInterval;
 
         // Finger combination game variables
         const FINGER_COMBINATIONS = [
@@ -636,7 +669,7 @@
             { name: "Index + Ring + Pinky", fingers: [8, 16, 20] },
             { name: "Middle + Ring + Pinky", fingers: [12, 16, 20] },
             { name: "All Four", fingers: [8, 12, 16, 20] },
-            { name: "Index + Ring", fingers: [8, 16] }  // 16th combination
+            { name: "Thumb Only", fingers: [] }  // 16th combination - just show thumb
         ];
 
         const FINGER_LANDMARKS = {
@@ -662,9 +695,10 @@
         let currentHandIndex = 0;
         let currentCombinationIndex = 0;
         let allResults = [];
-        let fingerCircles = {};
         let touchingFingers = new Set();
         let lastCorrectTime = 0;
+        let currentCombination = null;
+        let showingInstruction = false;
 
         // Initialize MediaPipe Hands
         function initializeHands() {
@@ -702,38 +736,33 @@
                 videoElement.onloadedmetadata = () => {
                     canvasElement.width = videoElement.videoWidth;
                     canvasElement.height = videoElement.videoHeight;
-                    createFingerCircles();
+
+                    let lastFrameTime = Date.now();
+                    let freezeWatchdog = null;
 
                     const processFrame = async () => {
                         try {
                             await hands.send({ image: videoElement });
+                            lastFrameTime = Date.now();
                         } catch (err) {
                             console.warn("MediaPipe processing error:", err);
                         }
                         requestAnimationFrame(processFrame);
                     };
 
+                    freezeWatchdog = setInterval(() => {
+                        const now = Date.now();
+                        if (now - lastFrameTime > 2000) {
+                            console.warn("Hand tracking seems frozen. Restarting MediaPipe Hands...");
+                            hands.close();
+                            initializeHands();
+                        }
+                    }, 1000);
+
                     requestAnimationFrame(processFrame);
                 };
             }).catch(err => {
                 console.error("Camera access error:", err);
-            });
-        }
-
-        // Create finger circle elements
-        function createFingerCircles() {
-            const videoContainer = document.querySelector('.video-container');
-            const fingerTips = [FINGER_LANDMARKS.THUMB_TIP, FINGER_LANDMARKS.INDEX_TIP, 
-                              FINGER_LANDMARKS.MIDDLE_TIP, FINGER_LANDMARKS.RING_TIP, 
-                              FINGER_LANDMARKS.PINKY_TIP];
-
-            fingerTips.forEach(landmark => {
-                const circle = document.createElement('div');
-                circle.className = 'finger-circle';
-                circle.id = `finger-${landmark}`;
-                circle.style.display = 'none';
-                videoContainer.appendChild(circle);
-                fingerCircles[landmark] = circle;
             });
         }
 
@@ -764,17 +793,29 @@
                     currentDetectedHand = null;
                 }
                 
-                updateHandPositionFeedback(landmarks);
-                updateFingerCircles(landmarks, canvasElement);
+                // Hand position checking logic
+                if (!recording && (frameCount < 10 || frameCount % 10 === 0)) {
+                    updateHandPositionFeedback(landmarks);
+                }
                 
-                if (recording && isCorrectHandDetectedForCurrentTrial()) {
+                const requiredHand = trialConditions[currentHandIndex].hand.toLowerCase();
+
+                if (!currentDetectedHand || currentDetectedHand.toLowerCase() !== requiredHand) {
+                    // Wrong hand detected
+                    canvasCtx.restore();
+                    return;
+                }
+                
+                if (recording && currentCombination) {
                     processFingerCombination(landmarks, canvasElement);
+                } else {
+                    // Draw basic visualization when not recording
+                    drawHandVisualization(landmarks, canvasElement);
                 }
             } else {
                 handDetected = false;
                 currentDetectedHand = null;
                 updateHandPositionFeedback(null);
-                hideAllFingerCircles();
             }
 
             canvasCtx.restore();
@@ -782,10 +823,13 @@
 
         function updateHandPositionFeedback(landmarks) {
             const positionStatus = document.getElementById('position-status');
+            const handOutline = document.getElementById('hand-outline');
             
             if (!landmarks) {
                 positionStatus.textContent = 'No hand detected';
                 positionStatus.className = 'position-status error';
+                handOutline.classList.remove('hand-outline-ready');
+                handOutline.classList.add('hand-outline-not-ready');
                 window.handPositionCorrect = false;
                 return;
             }
@@ -815,10 +859,16 @@
                 const requiredHand = trialConditions[currentHandIndex].hand.toUpperCase();
                 positionStatus.textContent = `Wrong hand! Use ${requiredHand} hand`;
                 positionStatus.className = 'position-status error';
+                handOutline.classList.remove('hand-outline-ready');
+                handOutline.classList.add('hand-outline-not-ready');
             } else if (goodDistance && fingersOpen) {
                 positionStatus.textContent = '✓ Ready - Press SPACE';
                 positionStatus.className = 'position-status ready';
+                handOutline.classList.remove('hand-outline-not-ready');
+                handOutline.classList.add('hand-outline-ready');
             } else {
+                handOutline.classList.remove('hand-outline-ready');
+                handOutline.classList.add('hand-outline-not-ready');
                 positionStatus.className = 'position-status warning';
                 
                 if (!goodDistance) {
@@ -835,37 +885,39 @@
             }
         }
 
-        function updateFingerCircles(landmarks, canvasElement) {
+        function drawHandVisualization(landmarks, canvasElement) {
             const fingerTips = [FINGER_LANDMARKS.THUMB_TIP, FINGER_LANDMARKS.INDEX_TIP, 
                               FINGER_LANDMARKS.MIDDLE_TIP, FINGER_LANDMARKS.RING_TIP, 
                               FINGER_LANDMARKS.PINKY_TIP];
 
             fingerTips.forEach(landmark => {
-                const circle = fingerCircles[landmark];
-                if (circle && landmarks[landmark]) {
-                    const tip = landmarks[landmark];
-                    circle.style.display = 'block';
-                    circle.style.left = `${tip.x * canvasElement.width}px`;
-                    circle.style.top = `${tip.y * canvasElement.height}px`;
+                const tip = landmarks[landmark];
+                if (tip) {
+                    // Default gray circles
+                    canvasCtx.fillStyle = 'rgba(128, 128, 128, 0.7)';
+                    canvasCtx.strokeStyle = '#ffffff';
+                    canvasCtx.lineWidth = 3;
+                    
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(tip.x * canvasElement.width, tip.y * canvasElement.height, 12, 0, 2 * Math.PI);
+                    canvasCtx.fill();
+                    canvasCtx.stroke();
                 }
             });
         }
 
-        function hideAllFingerCircles() {
-            Object.values(fingerCircles).forEach(circle => {
-                circle.style.display = 'none';
-            });
-        }
-
         function processFingerCombination(landmarks, canvasElement) {
-            const currentCombination = FINGER_COMBINATIONS[currentCombinationIndex];
+            if (!currentCombination) return;
+
             const thumbTip = landmarks[FINGER_LANDMARKS.THUMB_TIP];
-            
             const currentlyTouching = new Set();
             const TOUCH_THRESHOLD = 0.08;
 
             // Check which fingers are touching the thumb
-            currentCombination.fingers.forEach(fingerLandmark => {
+            const allFingerTips = [FINGER_LANDMARKS.INDEX_TIP, FINGER_LANDMARKS.MIDDLE_TIP, 
+                                 FINGER_LANDMARKS.RING_TIP, FINGER_LANDMARKS.PINKY_TIP];
+
+            allFingerTips.forEach(fingerLandmark => {
                 const fingerTip = landmarks[fingerLandmark];
                 const distance = Math.sqrt(
                     Math.pow((thumbTip.x - fingerTip.x), 2) +
@@ -878,8 +930,8 @@
                 }
             });
 
-            // Update visual feedback
-            updateFingerVisualFeedback(currentCombination, currentlyTouching, landmarks);
+            // Draw finger visualizations with feedback
+            drawFingerVisualization(landmarks, canvasElement, currentlyTouching);
 
             // Check if the correct combination is being touched
             const requiredFingers = new Set(currentCombination.fingers);
@@ -887,7 +939,7 @@
                 currentlyTouching.size === requiredFingers.size &&
                 [...currentlyTouching].every(finger => requiredFingers.has(finger));
 
-            if (correctCombination && currentlyTouching.size > 0) {
+            if (correctCombination && currentlyTouching.size === requiredFingers.size) {
                 const currentTime = Date.now();
                 if (currentTime - lastCorrectTime > 500) { // Debounce
                     lastCorrectTime = currentTime;
@@ -900,30 +952,55 @@
             touchingFingers = currentlyTouching;
         }
 
-        function updateFingerVisualFeedback(currentCombination, currentlyTouching, landmarks) {
+        function drawFingerVisualization(landmarks, canvasElement, currentlyTouching) {
+            const fingerTips = [FINGER_LANDMARKS.THUMB_TIP, FINGER_LANDMARKS.INDEX_TIP, 
+                              FINGER_LANDMARKS.MIDDLE_TIP, FINGER_LANDMARKS.RING_TIP, 
+                              FINGER_LANDMARKS.PINKY_TIP];
+
             const requiredFingers = new Set(currentCombination.fingers);
-            
-            // Reset all circles to default state
-            Object.keys(fingerCircles).forEach(landmark => {
-                const circle = fingerCircles[landmark];
-                circle.className = 'finger-circle';
-                
-                const landmarkNum = parseInt(landmark);
-                
-                // Highlight target fingers
-                if (requiredFingers.has(landmarkNum)) {
-                    circle.classList.add('target');
-                }
-                
-                // Show feedback for touching fingers
-                if (currentlyTouching.has(landmarkNum)) {
-                    if (requiredFingers.has(landmarkNum)) {
-                        circle.classList.remove('target');
-                        circle.classList.add('correct');
-                    } else {
-                        circle.classList.add('wrong');
+
+            fingerTips.forEach(landmark => {
+                const tip = landmarks[landmark];
+                if (!tip) return;
+
+                let fillColor = 'rgba(128, 128, 128, 0.7)'; // Default gray
+                let strokeColor = '#ffffff';
+                let radius = 12;
+
+                // Thumb is always highlighted
+                if (landmark === FINGER_LANDMARKS.THUMB_TIP) {
+                    fillColor = 'rgba(59, 130, 246, 0.8)'; // Blue for thumb
+                    strokeColor = '#3b82f6';
+                    radius = 14;
+                } else {
+                    // Target fingers
+                    if (requiredFingers.has(landmark)) {
+                        fillColor = 'rgba(59, 130, 246, 0.8)'; // Blue for targets
+                        strokeColor = '#3b82f6';
+                    }
+                    
+                    // Touching feedback
+                    if (currentlyTouching.has(landmark)) {
+                        if (requiredFingers.has(landmark)) {
+                            fillColor = 'rgba(34, 197, 94, 0.9)'; // Green for correct
+                            strokeColor = '#22c55e';
+                            radius = 16;
+                        } else {
+                            fillColor = 'rgba(239, 68, 68, 0.9)'; // Red for wrong
+                            strokeColor = '#ef4444';
+                            radius = 16;
+                        }
                     }
                 }
+
+                canvasCtx.fillStyle = fillColor;
+                canvasCtx.strokeStyle = strokeColor;
+                canvasCtx.lineWidth = 3;
+                
+                canvasCtx.beginPath();
+                canvasCtx.arc(tip.x * canvasElement.width, tip.y * canvasElement.height, radius, 0, 2 * Math.PI);
+                canvasCtx.fill();
+                canvasCtx.stroke();
             });
         }
 
@@ -933,7 +1010,7 @@
                 handIndex: currentHandIndex,
                 hand: trialConditions[currentHandIndex].hand,
                 combinationIndex: currentCombinationIndex,
-                combination: FINGER_COMBINATIONS[currentCombinationIndex],
+                combination: currentCombination,
                 timestamp: new Date().toISOString(),
                 completionTime: Date.now() - startTime
             };
@@ -957,14 +1034,24 @@
                 }
             } else {
                 // Next combination for same hand
-                updateCombinationDisplay();
+                showNextCombination();
             }
         }
 
-        function updateCombinationDisplay() {
-            const combination = FINGER_COMBINATIONS[currentCombinationIndex];
+        function showNextCombination() {
+            currentCombination = FINGER_COMBINATIONS[currentCombinationIndex];
             document.getElementById('progress-display').textContent = `${currentCombinationIndex + 1}/16`;
-            document.getElementById('combination-text').textContent = combination.name;
+            
+            // Show instruction overlay
+            const taskInstruction = document.getElementById('task-instruction');
+            const targetFingers = document.getElementById('target-fingers');
+            
+            targetFingers.textContent = currentCombination.name;
+            taskInstruction.style.display = 'block';
+            
+            setTimeout(() => {
+                taskInstruction.style.display = 'none';
+            }, 2000);
         }
 
         function startRecording() {
@@ -984,13 +1071,18 @@
                 return;
             }
 
+            if (currentHandIndex >= trialConditions.length) {
+                alert('Assessment complete!');
+                return;
+            }
+
             // Start countdown
             let countdown = 3;
             const countdownEl = document.getElementById('countdown');
             countdownEl.style.display = 'block';
             countdownEl.textContent = countdown;
 
-            const countdownInterval = setInterval(() => {
+            countdownInterval = setInterval(() => {
                 if (!handDetected || !isCorrectHandDetectedForCurrentTrial()) {
                     clearInterval(countdownInterval);
                     countdownEl.style.display = 'none';
@@ -1015,21 +1107,29 @@
 
         function startActualRecording() {
             document.getElementById('hand-guide-overlay').style.display = 'none';
+            document.getElementById('hand-outline').style.display = 'none';
             
             recording = true; 
             startTime = Date.now();
             frameCount = 0;
             touchingFingers = new Set();
             lastCorrectTime = 0;
+            
+            // Show first combination
+            showNextCombination();
         }
 
         function stopRecording() {
             recording = false;
             document.getElementById('hand-guide-overlay').style.display = 'block';
+            document.getElementById('hand-outline').style.display = 'block';
+            document.getElementById('task-instruction').style.display = 'none';
             
             const positionStatus = document.getElementById('position-status');
             positionStatus.textContent = 'Ready for next trial';
             positionStatus.className = 'position-status ready';
+            
+            currentCombination = null;
         }
 
         function updateConditionUI() {
@@ -1050,6 +1150,7 @@
             
             const handGuide = document.getElementById('hand-guide-overlay');
             handGuide.style.display = 'block';
+            document.getElementById('hand-outline').style.display = 'block';
 
             const instructionHTML = `Hand ${handNum} of 2<br><span style="font-size: 1.8rem; margin-top: 1rem; display: block;">Use your <strong>${handText.toUpperCase()}</strong> hand</span>`;
 
@@ -1062,7 +1163,9 @@
             
             // Reset displays
             currentCombinationIndex = 0;
-            updateCombinationDisplay();
+            document.getElementById('progress-display').textContent = '1/16';
+            document.getElementById('combination-text').textContent = 'Ready';
+            document.getElementById('target-fingers').textContent = 'Press Space';
             
             const positionStatus = document.getElementById('position-status');
             positionStatus.textContent = 'Position hand in view';
@@ -1096,7 +1199,7 @@
                         </p>
                     </div>
                     
-                    <div style="display: flex; gap: 2rem; justify-content: center;">
+                    <div style="display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;">
                         <button onclick="location.reload()" style="background-color: #000000; color: white; border: none; padding: 1.5rem 3rem; font-size: 1.3rem; font-weight: 500; border-radius: 60px; cursor: pointer; transition: all 0.2s ease; font-family: 'Inter', sans-serif;">
                             Take Test Again
                         </button>
