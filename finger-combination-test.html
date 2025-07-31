@@ -830,6 +830,8 @@
         let combinationStartTime = 0;
         let wrongTouchCount = 0;
         let detectionFrames = [];
+        let combinationCompleted = false;
+        let completedFingers = new Set();
 
         // Enhanced touch detection parameters
         const TOUCH_THRESHOLD = 0.06; // More precise threshold
