@@ -1108,22 +1108,29 @@
                 [...validatedTouching].every(finger => requiredFingers.has(finger)) &&
                 requiredFingers.size > 0; // Ensure it's not an empty combination
 
-            // Special case for "Thumb Only" combination
-            if (currentCombination.name === "Thumb Only" && validatedTouching.size === 0) {
-                const currentTime = Date.now();
-                if (currentTime - lastCorrectTime > 800) { // Longer delay for thumb-only
-                    lastCorrectTime = currentTime;
-                    setTimeout(() => {
-                        nextCombination();
-                    }, 300);
-                }
-            } else if (correctCombination && validatedTouching.size === requiredFingers.size) {
-                const currentTime = Date.now();
-                if (currentTime - lastCorrectTime > 400) { // Reduced debounce for faster response
-                    lastCorrectTime = currentTime;
-                    setTimeout(() => {
-                        nextCombination();
-                    }, 200);
+            // Only process completion if not already completed
+            if (!combinationCompleted) {
+                // Special case for "Thumb Only" combination
+                if (currentCombination.name === "Thumb Only" && validatedTouching.size === 0) {
+                    const currentTime = Date.now();
+                    if (currentTime - lastCorrectTime > 800) { // Longer delay for thumb-only
+                        lastCorrectTime = currentTime;
+                        combinationCompleted = true;
+                        completedFingers = new Set([FINGER_LANDMARKS.THUMB_TIP]); // Include thumb for thumb-only
+                        setTimeout(() => {
+                            nextCombination();
+                        }, 300);
+                    }
+                } else if (correctCombination && validatedTouching.size === requiredFingers.size) {
+                    const currentTime = Date.now();
+                    if (currentTime - lastCorrectTime > 400) { // Reduced debounce for faster response
+                        lastCorrectTime = currentTime;
+                        combinationCompleted = true;
+                        completedFingers = new Set(requiredFingers); // Store completed fingers
+                        setTimeout(() => {
+                            nextCombination();
+                        }, 200);
+                    }
                 }
             }
 
@@ -1165,28 +1172,43 @@
                 let strokeColor = '#ffffff';
                 let radius = 12;
 
-                // Thumb is always highlighted during task
-                if (landmark === FINGER_LANDMARKS.THUMB_TIP) {
-                    fillColor = 'rgba(59, 130, 246, 0.8)'; // Blue for thumb
-                    strokeColor = '#3b82f6';
-                    radius = 14;
-                } else {
-                    // Target fingers
-                    if (requiredFingers.has(landmark)) {
-                        fillColor = 'rgba(59, 130, 246, 0.8)'; // Blue for targets
-                        strokeColor = '#3b82f6';
+                // PRIORITY 1: If combination is completed, show green for completed fingers and thumb
+                if (combinationCompleted) {
+                    if (landmark === FINGER_LANDMARKS.THUMB_TIP || completedFingers.has(landmark)) {
+                        fillColor = 'rgba(34, 197, 94, 0.9)'; // Green when completed
+                        strokeColor = '#22c55e';
+                        radius = 16;
+                    } else {
+                        // Non-target fingers stay gray when completed
+                        fillColor = 'rgba(128, 128, 128, 0.7)';
+                        strokeColor = '#ffffff';
+                        radius = 12;
                     }
-                    
-                    // Touching feedback
-                    if (currentlyTouching.has(landmark)) {
+                } else {
+                    // PRIORITY 2: Normal interaction states (only when not completed)
+                    // Thumb is always highlighted during task
+                    if (landmark === FINGER_LANDMARKS.THUMB_TIP) {
+                        fillColor = 'rgba(59, 130, 246, 0.8)'; // Blue for thumb
+                        strokeColor = '#3b82f6';
+                        radius = 14;
+                    } else {
+                        // Target fingers
                         if (requiredFingers.has(landmark)) {
-                            fillColor = 'rgba(34, 197, 94, 0.9)'; // Green for correct
-                            strokeColor = '#22c55e';
-                            radius = 16;
-                        } else {
-                            fillColor = 'rgba(239, 68, 68, 0.9)'; // Red for wrong
-                            strokeColor = '#ef4444';
-                            radius = 16;
+                            fillColor = 'rgba(59, 130, 246, 0.8)'; // Blue for targets
+                            strokeColor = '#3b82f6';
+                        }
+                        
+                        // Current touching feedback
+                        if (currentlyTouching.has(landmark)) {
+                            if (requiredFingers.has(landmark)) {
+                                fillColor = 'rgba(34, 197, 94, 0.9)'; // Green for correct
+                                strokeColor = '#22c55e';
+                                radius = 16;
+                            } else {
+                                fillColor = 'rgba(239, 68, 68, 0.9)'; // Red for wrong
+                                strokeColor = '#ef4444';
+                                radius = 16;
+                            }
                         }
                     }
                 }
@@ -1270,6 +1292,8 @@
             combinationStartTime = Date.now();
             wrongTouchCount = 0;
             detectionFrames = [];
+            combinationCompleted = false; // Reset completion state
+            completedFingers = new Set(); // Reset completed fingers
             
             // Update UI
             document.getElementById('progress-display').textContent = `${currentCombinationIndex + 1}/16`;
@@ -1336,6 +1360,8 @@
             touchingFingers = new Set();
             lastCorrectTime = 0;
             detectionFrames = [];
+            combinationCompleted = false; // Reset completion state
+            completedFingers = new Set(); // Reset completed fingers
             
             // Show first combination
             showNextCombination();
