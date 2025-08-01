@@ -1424,43 +1424,57 @@ function processFingerCombination(landmarks, canvasElement) {
         requiredFingers.size > 0;
 
     // Only process completion if not already completed (existing logic)
-    if (!combinationCompleted) {
-        if (correctCombination && validatedTouching.size === requiredFingers.size) {
-            const currentTime = Date.now();
-            if (currentTime - lastCorrectTime > 400) {
-                lastCorrectTime = currentTime;
-                combinationCompleted = true;
-                completedFingers = new Set(requiredFingers);
-                setTimeout(() => {
-                    nextCombination();
-                }, 200);
+        // Only process completion if not already completed
+        if (!combinationCompleted) {
+            // Use currentlyTouching instead of validatedTouching for faster response
+            const correctCombination = 
+                currentlyTouching.size === requiredFingers.size &&
+                [...currentlyTouching].every(finger => requiredFingers.has(finger)) &&
+                requiredFingers.size > 0;
+        
+            console.log(`Touch check: currentlyTouching=${Array.from(currentlyTouching)}, requiredFingers=${Array.from(requiredFingers)}, correctCombination=${correctCombination}`);
+        
+            if (correctCombination) {
+                const currentTime = Date.now();
+                if (currentTime - lastCorrectTime > 300) { // Reduced debounce
+                    console.log("COMBINATION COMPLETED! Advancing...");
+                    lastCorrectTime = currentTime;
+                    combinationCompleted = true;
+                    completedFingers = new Set(requiredFingers);
+                    setTimeout(() => {
+                        nextCombination();
+                    }, 200);
+                }
             }
         }
-    }
 
     touchingFingers = validatedTouching;
 }
 
-        function validateTouchDetection(currentTouching) {
-            // Require detection in at least MIN_DETECTION_FRAMES recent frames
-            const validated = new Set();
-            
-            currentTouching.forEach(finger => {
-                let detectionCount = 0;
-                detectionFrames.forEach(frame => {
-                    if (frame.touching.has(finger)) {
-                        detectionCount++;
-                    }
-                });
-                
-                if (detectionCount >= MIN_DETECTION_FRAMES) {
-                    validated.add(finger);
-                }
-            });
-            
-            return validated;
+function validateTouchDetection(currentTouching) {
+    // Much more forgiving validation
+    const validated = new Set();
+    
+    currentTouching.forEach(finger => {
+        let recentCount = 0;
+        // Only check the last few frames
+        const recentFrames = detectionFrames.slice(-3);
+        
+        recentFrames.forEach(frame => {
+            if (frame.touching.has(finger)) {
+                recentCount++;
+            }
+        });
+        
+        // If detected in any recent frame, consider it valid
+        if (recentCount >= 1) {
+            validated.add(finger);
         }
-
+    });
+    
+    return validated;
+}
+        
 function drawFingerVisualization(landmarks, canvasElement, currentlyTouching) {
     const fingerTips = [FINGER_LANDMARKS.THUMB_TIP, FINGER_LANDMARKS.INDEX_TIP, 
                       FINGER_LANDMARKS.MIDDLE_TIP, FINGER_LANDMARKS.RING_TIP, 
