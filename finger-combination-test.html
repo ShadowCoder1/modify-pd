@@ -1461,93 +1461,78 @@ function processFingerCombination(landmarks, canvasElement) {
             return validated;
         }
 
-        function drawFingerVisualization(landmarks, canvasElement, currentlyTouching) {
-            const fingerTips = [FINGER_LANDMARKS.THUMB_TIP, FINGER_LANDMARKS.INDEX_TIP, 
-                              FINGER_LANDMARKS.MIDDLE_TIP, FINGER_LANDMARKS.RING_TIP, 
-                              FINGER_LANDMARKS.PINKY_TIP];
+function drawFingerVisualization(landmarks, canvasElement, currentlyTouching) {
+    const fingerTips = [FINGER_LANDMARKS.THUMB_TIP, FINGER_LANDMARKS.INDEX_TIP, 
+                      FINGER_LANDMARKS.MIDDLE_TIP, FINGER_LANDMARKS.RING_TIP, 
+                      FINGER_LANDMARKS.PINKY_TIP];
 
-            const requiredFingers = new Set(currentCombination.fingers);
+    const requiredFingers = new Set(currentCombination.fingers);
 
-            fingerTips.forEach(landmark => {
-                const tip = landmarks[landmark];
-                if (!tip) return;
+    fingerTips.forEach(landmark => {
+        const tip = landmarks[landmark];
+        if (!tip) return;
 
-                // Apply smoothing to circle positions for stability
-                const currentX = tip.x * canvasElement.width;
-                const currentY = tip.y * canvasElement.height;
-                
-                if (!fingerPositionSmoothing[landmark]) {
-                    fingerPositionSmoothing[landmark] = { x: currentX, y: currentY };
-                }
-                
-                // Smooth the position
-                fingerPositionSmoothing[landmark].x = fingerPositionSmoothing[landmark].x * SMOOTHING_FACTOR + currentX * (1 - SMOOTHING_FACTOR);
-                fingerPositionSmoothing[landmark].y = fingerPositionSmoothing[landmark].y * SMOOTHING_FACTOR + currentY * (1 - SMOOTHING_FACTOR);
-                
-                const smoothX = fingerPositionSmoothing[landmark].x;
-                const smoothY = fingerPositionSmoothing[landmark].y;
-
-                let fillColor = 'rgba(128, 128, 128, 0.7)'; // Default gray
-                let strokeColor = '#ffffff';
-                let radius = 12;
-
-                // PRIORITY 1: If combination is completed, show green for completed fingers and thumb
-                if (combinationCompleted) {
-                    if (landmark === FINGER_LANDMARKS.THUMB_TIP || completedFingers.has(landmark)) {
-                        fillColor = 'rgba(34, 197, 94, 0.9)'; // Green when completed
-                        strokeColor = '#22c55e';
-                        radius = 16;
-                    } else {
-                        // Non-target fingers stay gray when completed
-                        fillColor = 'rgba(128, 128, 128, 0.7)';
-                        strokeColor = '#ffffff';
-                        radius = 12;
-                    }
-                } else {
-                    // PRIORITY 2: Normal interaction states (only when not completed)
-                    // Thumb is always highlighted during task
-                    if (landmark === FINGER_LANDMARKS.THUMB_TIP) {
-                        fillColor = 'rgba(59, 130, 246, 0.8)'; // Blue for thumb
-                        strokeColor = '#3b82f6';
-                        radius = 14;
-                    } else {
-                        // Target fingers
-                        if (requiredFingers.has(landmark)) {
-                            fillColor = 'rgba(59, 130, 246, 0.8)'; // Blue for targets
-                            strokeColor = '#3b82f6';
-                        }
-                        
-                        // Current touching feedback
-                        if (currentlyTouching.has(landmark)) {
-                            if (requiredFingers.has(landmark)) {
-                                fillColor = 'rgba(34, 197, 94, 0.9)'; // Green for correct
-                                strokeColor = '#22c55e';
-                                radius = 16;
-                            } else {
-                                fillColor = 'rgba(239, 68, 68, 0.9)'; // Red for wrong
-                                strokeColor = '#ef4444';
-                                radius = 16;
-                            }
-                        }
-                    }
-                }
-
-                canvasCtx.fillStyle = fillColor;
-                canvasCtx.strokeStyle = strokeColor;
-                canvasCtx.lineWidth = 3;
-                
-                // Add shadow for better visibility
-                canvasCtx.shadowBlur = 4;
-                canvasCtx.shadowColor = strokeColor;
-                
-                canvasCtx.beginPath();
-                canvasCtx.arc(smoothX, smoothY, radius, 0, 2 * Math.PI); // Use smoothed positions
-                canvasCtx.fill();
-                canvasCtx.stroke();
-                
-                canvasCtx.shadowBlur = 0;
-            });
+        // Apply smoothing to circle positions for stability
+        const currentX = tip.x * canvasElement.width;
+        const currentY = tip.y * canvasElement.height;
+        
+        if (!fingerPositionSmoothing[landmark]) {
+            fingerPositionSmoothing[landmark] = { x: currentX, y: currentY };
         }
+        
+        // Smooth the position
+        fingerPositionSmoothing[landmark].x = fingerPositionSmoothing[landmark].x * SMOOTHING_FACTOR + currentX * (1 - SMOOTHING_FACTOR);
+        fingerPositionSmoothing[landmark].y = fingerPositionSmoothing[landmark].y * SMOOTHING_FACTOR + currentY * (1 - SMOOTHING_FACTOR);
+        
+        const smoothX = fingerPositionSmoothing[landmark].x;
+        const smoothY = fingerPositionSmoothing[landmark].y;
+
+        let fillColor = 'rgba(128, 128, 128, 0.7)'; // Default gray
+        let strokeColor = '#ffffff';
+        let radius = 12;
+
+        // Thumb is always highlighted during task
+        if (landmark === FINGER_LANDMARKS.THUMB_TIP) {
+            fillColor = 'rgba(59, 130, 246, 0.8)'; // Blue for thumb
+            strokeColor = '#3b82f6';
+            radius = 14;
+        } else {
+            // Target fingers get blue highlighting
+            if (requiredFingers.has(landmark)) {
+                fillColor = 'rgba(59, 130, 246, 0.8)'; // Blue for targets
+                strokeColor = '#3b82f6';
+            }
+            
+            // Current touching feedback (this should always work)
+            if (currentlyTouching.has(landmark)) {
+                if (requiredFingers.has(landmark)) {
+                    fillColor = 'rgba(34, 197, 94, 0.9)'; // Green for correct
+                    strokeColor = '#22c55e';
+                    radius = 16;
+                } else {
+                    fillColor = 'rgba(239, 68, 68, 0.9)'; // Red for wrong
+                    strokeColor = '#ef4444';
+                    radius = 16;
+                }
+            }
+        }
+
+        canvasCtx.fillStyle = fillColor;
+        canvasCtx.strokeStyle = strokeColor;
+        canvasCtx.lineWidth = 3;
+        
+        // Add shadow for better visibility
+        canvasCtx.shadowBlur = 4;
+        canvasCtx.shadowColor = strokeColor;
+        
+        canvasCtx.beginPath();
+        canvasCtx.arc(smoothX, smoothY, radius, 0, 2 * Math.PI);
+        canvasCtx.fill();
+        canvasCtx.stroke();
+        
+        canvasCtx.shadowBlur = 0;
+    });
+}
 
 function nextCombination() {
     const completionTime = Date.now() - combinationStartTime;
