@@ -1566,25 +1566,108 @@
         }
 
         function finishAssessment() {
-            document.getElementById('page-webcam').style.display = 'none';
-            document.getElementById('finalResults').style.display = 'block';
+            console.log("Starting finish assessment...");
+            console.log("Total results:", allResults.length);
             
-            // Comprehensive analysis
+            try {
+                // Hide webcam interface
+                document.getElementById('page-webcam').style.display = 'none';
+                document.getElementById('finalResults').style.display = 'block';
+                
+                // Ensure we have results
+                if (allResults.length === 0) {
+                    console.error("No results found!");
+                    document.getElementById('finalResults').innerHTML = `
+                        <div style="padding: 2rem; text-align: center; font-family: 'Inter', sans-serif;">
+                            <h1>No Results Found</h1>
+                            <p>No data was collected during the assessment.</p>
+                            <button onclick="location.reload()" style="background: #000; color: white; border: none; padding: 1rem 2rem; border-radius: 50px; cursor: pointer;">Start Over</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Comprehensive analysis
+                const rightResults = allResults.filter(r => r.hand === 'right');
+                const leftResults = allResults.filter(r => r.hand === 'left');
+                
+                console.log("Right results:", rightResults.length);
+                console.log("Left results:", leftResults.length);
+                
+                // Create rankings for each hand
+                const rightRanking = createRanking(rightResults);
+                const leftRanking = createRanking(leftResults);
+                
+                // Calculate overall statistics
+                const overallStats = calculateOverallStats(allResults);
+                
+                console.log("Overall stats:", overallStats);
+                
+                // Generate and display results
+                generateResultsHTML(rightRanking, leftRanking, overallStats);
+        
+                // Save comprehensive results to database
+                saveResultsToDatabase(allResults, overallStats);
+                
+            } catch (error) {
+                console.error("Error in finishAssessment:", error);
+                
+                // Fallback display
+                document.getElementById('page-webcam').style.display = 'none';
+                document.getElementById('finalResults').style.display = 'block';
+                document.getElementById('finalResults').innerHTML = `
+                    <div style="padding: 2rem; text-align: center; font-family: 'Inter', sans-serif;">
+                        <h1>Assessment Complete!</h1>
+                        <p>Completed ${allResults.length} combinations</p>
+                        <p>Results processing encountered an error, but your data has been saved.</p>
+                        <button onclick="location.reload()" style="background: #000; color: white; border: none; padding: 1rem 2rem; border-radius: 50px; cursor: pointer;">Test Again</button>
+                    </div>
+                `;
+            }
+        }
+
+        function calculateOverallStats(allResults) {
+            if (allResults.length === 0) {
+                return {
+                    totalCombinations: 0,
+                    averageCompletionTime: 0,
+                    averageAccuracy: 0,
+                    averageIndependence: 0,
+                    totalWrongTouches: 0,
+                    fastestTime: 0,
+                    slowestTime: 0
+                };
+            }
+        
             const rightResults = allResults.filter(r => r.hand === 'right');
             const leftResults = allResults.filter(r => r.hand === 'left');
             
-            // Create rankings for each hand
-            const rightRanking = createRanking(rightResults);
-            const leftRanking = createRanking(leftResults);
+            const avgCompletionTime = allResults.reduce((sum, r) => sum + r.completionTime, 0) / allResults.length;
+            const avgAccuracy = allResults.reduce((sum, r) => sum + r.accuracyScore, 0) / allResults.length;
+            const avgIndependence = allResults.reduce((sum, r) => sum + r.independenceScore, 0) / allResults.length;
+            const totalWrongTouches = allResults.reduce((sum, r) => sum + r.wrongTouchCount, 0);
             
-            // Calculate overall statistics
-            const overallStats = calculateOverallStats(allResults);
+            const completionTimes = allResults.map(r => r.completionTime);
+            const fastestTime = Math.min(...completionTimes);
+            const slowestTime = Math.max(...completionTimes);
             
-            generateResultsHTML(rightRanking, leftRanking, overallStats);
-
-            // Save comprehensive results to database
-            saveResultsToDatabase(allResults, overallStats);
-        }
+            const rightAvgTime = rightResults.length > 0 ? rightResults.reduce((sum, r) => sum + r.completionTime, 0) / rightResults.length : 0;
+            const leftAvgTime = leftResults.length > 0 ? leftResults.reduce((sum, r) => sum + r.completionTime, 0) / leftResults.length : 0;
+            
+            return {
+                totalCombinations: allResults.length,
+                averageCompletionTime: avgCompletionTime,
+                averageAccuracy: avgAccuracy,
+                averageIndependence: avgIndependence,
+                totalWrongTouches: totalWrongTouches,
+                fastestTime: fastestTime,
+                slowestTime: slowestTime,
+                rightHandAverage: rightAvgTime,
+                leftHandAverage: leftAvgTime,
+                rightHandCount: rightResults.length,
+                leftHandCount: leftResults.length
+            };
+                }
 
         function createRanking(results) {
             return results
@@ -1596,12 +1679,37 @@
                 .sort((a, b) => b.rankingScore - a.rankingScore);
         }
 
-        function generateResultsHTML(rightRanking, leftRanking) {
+        function generateResultsHTML(rightRanking, leftRanking, overallStats) {
             console.log("Generating results HTML...");
             
             try {
                 const rightHTML = generateHandRankingHTML('Right Hand', rightRanking);
                 const leftHTML = generateHandRankingHTML('Left Hand', leftRanking);
+                
+                // Generate overall stats HTML
+                const statsHTML = `
+                    <div class="overall-stats">
+                        <h2 class="overall-title">Overall Performance</h2>
+                        <div class="stat-grid">
+                            <div class="stat-item">
+                                <div class="stat-value">${overallStats.totalCombinations}</div>
+                                <div class="stat-label">Total Combinations</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${(overallStats.averageCompletionTime/1000).toFixed(1)}s</div>
+                                <div class="stat-label">Average Time</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${overallStats.averageAccuracy.toFixed(1)}%</div>
+                                <div class="stat-label">Average Accuracy</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${overallStats.averageIndependence.toFixed(1)}%</div>
+                                <div class="stat-label">Independence Score</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
                 
                 const html = `
                     <div class="results-container">
@@ -1609,12 +1717,14 @@
                             <h1 class="results-title">Finger Combination Results</h1>
                             <p class="results-subtitle">Ranked by speed, accuracy, and finger independence</p>
                         </div>
-
+        
+                        ${statsHTML}
+        
                         <div class="results-grid">
                             ${rightHTML}
                             ${leftHTML}
                         </div>
-
+        
                         <div class="results-actions">
                             <button onclick="location.reload()" class="btn-primary">Test Again</button>
                             <button onclick="shareResults()" class="btn-secondary">Share Results</button>
@@ -1627,16 +1737,18 @@
                 
             } catch (error) {
                 console.error("Error generating results HTML:", error);
+                // Fallback results display
                 document.getElementById('finalResults').innerHTML = `
                     <div style="padding: 2rem; text-align: center; font-family: 'Inter', sans-serif;">
                         <h1>Assessment Complete!</h1>
                         <p>Completed ${allResults.length} combinations</p>
-                        <button onclick="location.reload()" style="background: #000; color: white; border: none; padding: 1rem 2rem; border-radius: 50px; cursor: pointer;">Test Again</button>
+                        <p>Average time: ${(overallStats.averageCompletionTime/1000).toFixed(1)} seconds</p>
+                        <p>Average accuracy: ${overallStats.averageAccuracy.toFixed(1)}%</p>
+                        <button onclick="location.reload()" style="background: #000; color: white; border: none; padding: 1rem 2rem; border-radius: 50px; cursor: pointer; margin-top: 1rem;">Test Again</button>
                     </div>
                 `;
             }
         }
-
         function generateHandRankingHTML(handTitle, ranking) {
             console.log(`Generating ${handTitle} ranking with ${ranking.length} items`);
             
@@ -1675,18 +1787,32 @@
                 </div>
             `;
         }
-
+        
         function saveResultsToDatabase(results, stats) {
-            db.collection("FingerCombinationResults")
-                .doc(participantID)
-                .set({
-                    completedAt: new Date().toISOString(),
-                    allResults: results,
-                    overallStats: stats,
-                    participantID: participantID
-                })
-                .then(() => console.log("Comprehensive finger combination results saved"))
-                .catch(err => console.error("Error saving results:", err));
+            console.log("Attempting to save results to database...");
+            
+            try {
+                db.collection("FingerCombinationResults")
+                    .doc(participantID)
+                    .set({
+                        completedAt: new Date().toISOString(),
+                        allResults: results,
+                        overallStats: stats,
+                        participantID: participantID,
+                        testVersion: "1.0",
+                        browserInfo: navigator.userAgent
+                    })
+                    .then(() => {
+                        console.log("Comprehensive finger combination results saved successfully");
+                    })
+                    .catch(err => {
+                        console.error("Error saving results to database:", err);
+                        // Don't let database errors affect the UI
+                    });
+            } catch (error) {
+                console.error("Error in saveResultsToDatabase:", error);
+                // Continue execution even if database save fails
+            }
         }
 
         function shareResults() {
