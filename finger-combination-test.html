@@ -1710,14 +1710,14 @@ function finishAssessment() {
 function createRanking(results) {
     return results
         .map(result => {
-            // Base performance score
+            // Base performance score (speed + accuracy + independence)
             const baseScore = (result.accuracyScore * 0.4) + (result.speedScore * 0.3) + (result.independenceScore * 0.3);
             
-            // Neurologically-informed difficulty weights (much more modest)
+            // Neurologically-informed complexity weighting: 3% per additional finger
             const fingerCount = result.combination.fingers.length;
-            const difficultyWeight = 1.0 + (fingerCount - 1) * 0.05; // 1.0, 1.05, 1.10, 1.15 instead of 1.67x-2.67x
+            const complexityWeight = 1.0 + (fingerCount - 1) * 0.03;
             
-            const rankingScore = baseScore * difficultyWeight;
+            const rankingScore = baseScore * complexityWeight;
             return { ...result, rankingScore };
         })
         .sort((a, b) => b.rankingScore - a.rankingScore);
