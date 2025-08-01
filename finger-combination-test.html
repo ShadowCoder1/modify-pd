@@ -1361,19 +1361,75 @@
         }
 
         function nextCombination() {
-            // Calculate finger independence score
-            const independenceScore = Math.max(0, 100 - (nonTargetFingerMovements / 10)); // Penalty for unwanted movements
-            
-            // Calculate comprehensive result metrics
             const completionTime = Date.now() - combinationStartTime;
-            const accuracyScore = Math.max(0, 100 - (wrongTouchCount * 15)); // 15% penalty per wrong touch
-            const speedScore = Math.max(0, 100 - Math.max(0, (completionTime - 800) / 40)); // Penalty after 0.8 seconds
+            const fingerCount = currentCombination.fingers.length;
             
-            // Advanced ranking formula
-            const baseScore = (accuracyScore * 0.4) + (speedScore * 0.3) + (independenceScore * 0.3);
-            const difficultyMultiplier = getDifficultyScore(currentCombination) / 3; // Normalize difficulty
-            const overallScore = baseScore * difficultyMultiplier;
-
+            // === ACCURACY SCORE (Most Important) ===
+            // Perfect accuracy is crucial - harsh penalties for mistakes
+            let accuracyScore = 100;
+            if (wrongTouchCount > 0) {
+                // First mistake: -20 points, each additional: -15 points
+                accuracyScore = Math.max(0, 100 - (20 + (wrongTouchCount - 1) * 15));
+            }
+            
+            // === SPEED SCORE (Difficulty-Adjusted) ===
+            // Different expectations based on task complexity
+            let baselineTime, excellentTime;
+            switch(fingerCount) {
+                case 1: // Single finger
+                    excellentTime = 600;   // 0.6s = excellent
+                    baselineTime = 1200;   // 1.2s = baseline
+                    break;
+                case 2: // Two fingers  
+                    excellentTime = 800;   // 0.8s = excellent
+                    baselineTime = 1600;   // 1.6s = baseline
+                    break;
+                case 3: // Three fingers
+                    excellentTime = 1000;  // 1.0s = excellent  
+                    baselineTime = 2000;   // 2.0s = baseline
+                    break;
+                case 4: // Four fingers
+                    excellentTime = 1200;  // 1.2s = excellent
+                    baselineTime = 2400;   // 2.4s = baseline
+                    break;
+                default:
+                    excellentTime = 800;
+                    baselineTime = 1600;
+            }
+            
+            let speedScore = 100;
+            if (completionTime > excellentTime) {
+                // Linear penalty between excellent and baseline time
+                const penaltyRange = baselineTime - excellentTime;
+                const overtime = completionTime - excellentTime;
+                speedScore = Math.max(0, 100 - (overtime / penaltyRange) * 60); // Max 60 point penalty
+            }
+            
+            // === INDEPENDENCE SCORE (Fine Motor Control) ===
+            // Penalty for unwanted finger movements (shows lack of control)
+            const independenceScore = Math.max(0, 100 - (nonTargetFingerMovements * 8)); // 8 points per unwanted movement
+            
+            // === DIFFICULTY BONUS ===
+            // Bonus for successfully completing harder tasks
+            const difficultyMultiplier = 1 + (fingerCount - 1) * 0.05; // 5% bonus per additional finger
+            
+            // === FINAL RANKING SCORE ===
+            // Accuracy dominates (60%), Speed secondary (25%), Independence tertiary (15%)
+            let baseScore = (accuracyScore * 0.60) + (speedScore * 0.25) + (independenceScore * 0.15);
+            
+            // Apply difficulty bonus only if performance is good (accuracy >= 85%)
+            let finalScore = baseScore;
+            if (accuracyScore >= 85) {
+                finalScore = baseScore * difficultyMultiplier;
+            }
+            
+            // === CONSISTENCY CHECK ===
+            // If someone has perfect accuracy and good speed, they should always rank higher
+            // than someone with mistakes, regardless of how fast the mistake-maker is
+            if (accuracyScore === 100 && speedScore >= 70) {
+                finalScore += 10; // Consistency bonus for accurate + reasonably fast
+            }
+        
             const result = {
                 handIndex: currentHandIndex,
                 hand: trialConditions[currentHandIndex].hand,
@@ -1386,30 +1442,43 @@
                 accuracyScore: accuracyScore,
                 speedScore: speedScore,
                 independenceScore: independenceScore,
-                overallScore: overallScore,
-                difficulty: getDifficultyScore(currentCombination),
-                fingerPositionData: fingerPositionData.slice() // Copy the data
+                overallScore: finalScore,
+                baseScore: baseScore,
+                difficultyMultiplier: difficultyMultiplier,
+                difficulty: fingerCount,
+                fingerPositionData: fingerPositionData.slice(),
+                // Debug info
+                debugInfo: {
+                    excellentTime: excellentTime,
+                    baselineTime: baselineTime,
+                    actualTime: completionTime,
+                    appliedDifficultyBonus: accuracyScore >= 85
+                }
             };
             
             allResults.push(result);
-
+            console.log("Result added - Final Score:", finalScore.toFixed(1), "Base:", baseScore.toFixed(1), "Accuracy:", accuracyScore, "Speed:", speedScore.toFixed(1), "Independence:", independenceScore.toFixed(1));
+        
             currentCombinationIndex++;
-
+            debugProgress();
+        
             if (currentCombinationIndex >= FINGER_COMBINATIONS.length) {
-                // Finished all combinations for this hand
+                console.log("Finished all combinations for hand:", trialConditions[currentHandIndex].hand);
                 currentHandIndex++;
                 currentCombinationIndex = 0;
-
+        
                 if (currentHandIndex >= trialConditions.length) {
-                    // Finished all hands
-                    finishAssessment();
+                    console.log("ASSESSMENT COMPLETE! Calling finishAssessment...");
+                    setTimeout(() => {
+                        finishAssessment();
+                    }, 100);
                 } else {
-                    // Start next hand
+                    console.log("Starting next hand:", trialConditions[currentHandIndex].hand);
                     stopRecording();
                     updateConditionUI();
                 }
             } else {
-                // Next combination for same hand - 1 second delay
+                console.log("Next combination for same hand");
                 setTimeout(() => {
                     showNextCombination();
                 }, 1000);
@@ -1669,15 +1738,42 @@
             };
                 }
 
-        function createRanking(results) {
-            return results
-                .map(result => {
-                    // Advanced ranking score: accuracy (40%) + speed (30%) + independence (30%)
-                    const rankingScore = result.overallScore;
-                    return { ...result, rankingScore };
-                })
-                .sort((a, b) => b.rankingScore - a.rankingScore);
-        }
+function createRanking(results) {
+    return results
+        .map(result => ({
+            ...result,
+            rankingScore: result.overallScore
+        }))
+        .sort((a, b) => {
+            // Primary sort: Overall score (higher is better)
+            if (Math.abs(a.rankingScore - b.rankingScore) > 0.1) {
+                return b.rankingScore - a.rankingScore;
+            }
+            
+            // Tiebreaker 1: Accuracy (higher is better)
+            if (a.accuracyScore !== b.accuracyScore) {
+                return b.accuracyScore - a.accuracyScore;
+            }
+            
+            // Tiebreaker 2: Speed - faster time is better (lower number)
+            if (Math.abs(a.completionTime - b.completionTime) > 50) { // 50ms difference threshold
+                return a.completionTime - b.completionTime;
+            }
+            
+            // Tiebreaker 3: Independence (higher is better)  
+            if (a.independenceScore !== b.independenceScore) {
+                return b.independenceScore - a.independenceScore;
+            }
+            
+            // Tiebreaker 4: Fewer wrong touches (lower is better)
+            if (a.wrongTouchCount !== b.wrongTouchCount) {
+                return a.wrongTouchCount - b.wrongTouchCount;
+            }
+            
+            // Final tiebreaker: Task difficulty (harder tasks ranked higher)
+            return b.difficulty - a.difficulty;
+        });
+}
 
 function generateResultsHTML(rightRanking, leftRanking, overallStats) {
     console.log("Generating compact results HTML...");
