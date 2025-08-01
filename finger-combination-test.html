@@ -810,7 +810,7 @@
             <div class="left-panel">
                 <!-- Progress Section -->
                 <div class="progress-section">
-                    <div class="progress-display" id="progress-display">1/16</div>
+                    <div class="progress-display" id="progress-display">1/15</div>
                     <div class="combination-display">
                         <div class="combination-text" id="combination-text">Ready</div>
                         <div class="combination-subtitle">PRESS SPACE</div>
@@ -886,8 +886,7 @@
             { name: "Index + Middle + Pinky", fingers: [8, 12, 20] },
             { name: "Index + Ring + Pinky", fingers: [8, 16, 20] },
             { name: "Middle + Ring + Pinky", fingers: [12, 16, 20] },
-            { name: "All Four", fingers: [8, 12, 16, 20] },
-            { name: "Thumb Only", fingers: [] }  // 16th combination - just show thumb
+            { name: "All Four", fingers: [8, 12, 16, 20] }
         ];
 
         // Shuffle array function
@@ -1232,18 +1231,7 @@
 
             // Only process completion if not already completed
             if (!combinationCompleted) {
-                // Special case for "Thumb Only" combination
-                if (currentCombination.name === "Thumb Only" && validatedTouching.size === 0) {
-                    const currentTime = Date.now();
-                    if (currentTime - lastCorrectTime > 800) { // Longer delay for thumb-only
-                        lastCorrectTime = currentTime;
-                        combinationCompleted = true;
-                        completedFingers = new Set([FINGER_LANDMARKS.THUMB_TIP]); // Include thumb for thumb-only
-                        setTimeout(() => {
-                            nextCombination();
-                        }, 300);
-                    }
-                } else if (correctCombination && validatedTouching.size === requiredFingers.size) {
+                if (correctCombination && validatedTouching.size === requiredFingers.size) {
                     const currentTime = Date.now();
                     if (currentTime - lastCorrectTime > 400) { // Reduced debounce for faster response
                         lastCorrectTime = currentTime;
@@ -1430,7 +1418,7 @@
             completedFingers = new Set(); // Reset completed fingers
             
             // Update UI
-            document.getElementById('progress-display').textContent = `${currentCombinationIndex + 1}/16`;
+            document.getElementById('progress-display').textContent = `${currentCombinationIndex + 1}/15`;
             document.getElementById('combination-text').textContent = currentCombination.name;
         }
 
@@ -1549,7 +1537,7 @@
             
             // Reset displays
             currentCombinationIndex = 0;
-            document.getElementById('progress-display').textContent = '1/16';
+            document.getElementById('progress-display').textContent = '1/15';
             document.getElementById('combination-text').textContent = 'Ready';
             
             const positionStatus = document.getElementById('position-status');
