@@ -1423,20 +1423,13 @@ function drawFingerVisualization(landmarks, canvasElement, currentlyTouching) {
                     }
                 }
                 break;
-                
-            case 'success':
-                // Show green for completed combination
-                if (landmark === FINGER_LANDMARKS.THUMB_TIP || completedFingers.has(landmark)) {
-                    fillColor = 'rgba(34, 197, 94, 0.9)'; // Green when completed
-                    strokeColor = '#22c55e';
-                    radius = 16;
-                } else {
-                    // Non-target fingers stay gray
-                    fillColor = 'rgba(128, 128, 128, 0.7)';
-                    strokeColor = '#ffffff';
-                    radius = 12;
-                }
-                break;
+                        
+        case 'success':
+            // Show grey for all fingers to cue hand opening
+            fillColor = 'rgba(128, 128, 128, 0.7)'; // All grey to cue opening
+            strokeColor = '#ffffff';
+            radius = 12;
+            break;
                 
             case 'waiting':
                 // All gray during waiting period
