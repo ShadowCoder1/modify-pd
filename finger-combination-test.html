@@ -937,9 +937,13 @@
         let nonTargetFingerMovements = 0;
 
         // Enhanced touch detection parameters
-        const TOUCH_THRESHOLD = 0.06; // More precise threshold
-        const MIN_DETECTION_FRAMES = 3; // Must detect touch for multiple frames
+        const TOUCH_THRESHOLD = 0.08; // Slightly more forgiving threshold
+        const MIN_DETECTION_FRAMES = 2; // Reduced from 3 for faster response
         const ACCURACY_BONUS_THRESHOLD = 2; // Max wrong touches for accuracy bonus
+
+        // Smoothing for visual stability
+        let fingerPositionSmoothing = {};
+        const SMOOTHING_FACTOR = 0.7;
 
         // Initialize MediaPipe Hands
         function initializeHands() {
@@ -1162,26 +1166,27 @@
             allFingerTips.forEach(fingerLandmark => {
                 const fingerTip = landmarks[fingerLandmark];
                 
-                // Calculate distance from thumb for all fingers
-                const distance3D = Math.sqrt(
-                    Math.pow((thumbTip.x - fingerTip.x), 2) +
-                    Math.pow((thumbTip.y - fingerTip.y), 2) +
-                    Math.pow((thumbTip.z - fingerTip.z) * 0.3, 2)
-                );
-
+                // Enhanced distance calculation with better weighting
                 const distance2D = Math.sqrt(
                     Math.pow((thumbTip.x - fingerTip.x), 2) +
                     Math.pow((thumbTip.y - fingerTip.y), 2)
                 );
 
-                const distance = Math.min(distance3D, distance2D);
+                const distance3D = Math.sqrt(
+                    Math.pow((thumbTip.x - fingerTip.x), 2) +
+                    Math.pow((thumbTip.y - fingerTip.y), 2) +
+                    Math.pow((thumbTip.z - fingerTip.z) * 0.2, 2) // Reduced z-weight for stability
+                );
+
+                // Use the more reliable measure with preference for 2D
+                const distance = Math.min(distance2D, distance3D * 1.1); // Slight preference for 2D
 
                 if (distance < TOUCH_THRESHOLD) {
                     currentlyTouching.add(fingerLandmark);
                 }
 
-                // Track unwanted movements in non-target fingers
-                if (!requiredFingers.has(fingerLandmark) && distance < 0.12) {
+                // Track unwanted movements in non-target fingers (slightly more forgiving)
+                if (!requiredFingers.has(fingerLandmark) && distance < 0.14) {
                     nonTargetFingerMovements++;
                 }
             });
@@ -1278,6 +1283,21 @@
                 const tip = landmarks[landmark];
                 if (!tip) return;
 
+                // Apply smoothing to circle positions for stability
+                const currentX = tip.x * canvasElement.width;
+                const currentY = tip.y * canvasElement.height;
+                
+                if (!fingerPositionSmoothing[landmark]) {
+                    fingerPositionSmoothing[landmark] = { x: currentX, y: currentY };
+                }
+                
+                // Smooth the position
+                fingerPositionSmoothing[landmark].x = fingerPositionSmoothing[landmark].x * SMOOTHING_FACTOR + currentX * (1 - SMOOTHING_FACTOR);
+                fingerPositionSmoothing[landmark].y = fingerPositionSmoothing[landmark].y * SMOOTHING_FACTOR + currentY * (1 - SMOOTHING_FACTOR);
+                
+                const smoothX = fingerPositionSmoothing[landmark].x;
+                const smoothY = fingerPositionSmoothing[landmark].y;
+
                 let fillColor = 'rgba(128, 128, 128, 0.7)'; // Default gray
                 let strokeColor = '#ffffff';
                 let radius = 12;
@@ -1332,7 +1352,7 @@
                 canvasCtx.shadowColor = strokeColor;
                 
                 canvasCtx.beginPath();
-                canvasCtx.arc(tip.x * canvasElement.width, tip.y * canvasElement.height, radius, 0, 2 * Math.PI);
+                canvasCtx.arc(smoothX, smoothY, radius, 0, 2 * Math.PI); // Use smoothed positions
                 canvasCtx.fill();
                 canvasCtx.stroke();
                 
