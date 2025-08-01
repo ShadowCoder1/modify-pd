@@ -935,6 +935,11 @@
         let completedFingers = new Set();
         let fingerPositionData = [];
         let nonTargetFingerMovements = 0;
+                // Enhanced finger independence tracking variables
+        let baselineFingerPositions = {};
+        let fingerMovementHistory = {};
+        let independenceAnalysisData = [];
+        let taskStartBaseline = null;
 
         // Enhanced touch detection parameters
         const TOUCH_THRESHOLD = 0.08; // Slightly more forgiving threshold
@@ -1009,6 +1014,195 @@
             }).catch(err => {
                 console.error("Camera access error:", err);
             });
+        }
+
+                // Initialize finger independence tracking when combination starts
+        function initializeFingerIndependenceTracking(landmarks) {
+            const allFingerTips = [FINGER_LANDMARKS.INDEX_TIP, FINGER_LANDMARKS.MIDDLE_TIP, 
+                                  FINGER_LANDMARKS.RING_TIP, FINGER_LANDMARKS.PINKY_TIP];
+            
+            // Capture baseline positions for all fingers
+            baselineFingerPositions = {};
+            fingerMovementHistory = {};
+            
+            allFingerTips.forEach(fingerLandmark => {
+                const tip = landmarks[fingerLandmark];
+                baselineFingerPositions[fingerLandmark] = {
+                    x: tip.x,
+                    y: tip.y,
+                    z: tip.z,
+                    timestamp: Date.now()
+                };
+                fingerMovementHistory[fingerLandmark] = [];
+            });
+            
+            taskStartBaseline = Date.now();
+            independenceAnalysisData = [];
+            
+            console.log("Finger independence baseline captured");
+        }
+        
+        // Enhanced finger independence analysis during task
+        function analyzeFingerIndependence(landmarks, requiredFingers) {
+            if (!baselineFingerPositions || Object.keys(baselineFingerPositions).length === 0) {
+                initializeFingerIndependenceTracking(landmarks);
+                return { score: 100, details: "Initializing baseline" };
+            }
+            
+            const allFingerTips = [FINGER_LANDMARKS.INDEX_TIP, FINGER_LANDMARKS.MIDDLE_TIP, 
+                                  FINGER_LANDMARKS.RING_TIP, FINGER_LANDMARKS.PINKY_TIP];
+            const currentTime = Date.now();
+            const requiredFingersSet = new Set(requiredFingers);
+            
+            let totalIndependenceViolations = 0;
+            let maxDeviation = 0;
+            let fingerAnalysis = {};
+            
+            allFingerTips.forEach(fingerLandmark => {
+                const currentTip = landmarks[fingerLandmark];
+                const baseline = baselineFingerPositions[fingerLandmark];
+                const isTargetFinger = requiredFingersSet.has(fingerLandmark);
+                
+                if (!baseline || !currentTip) return;
+                
+                // Calculate 3D deviation from baseline
+                const deviation3D = Math.sqrt(
+                    Math.pow(currentTip.x - baseline.x, 2) +
+                    Math.pow(currentTip.y - baseline.y, 2) +
+                    Math.pow((currentTip.z - baseline.z) * 0.3, 2) // Z weighted less
+                );
+                
+                // Calculate 2D movement (more reliable)
+                const deviation2D = Math.sqrt(
+                    Math.pow(currentTip.x - baseline.x, 2) +
+                    Math.pow(currentTip.y - baseline.y, 2)
+                );
+                
+                // Use the more conservative measurement
+                const finalDeviation = Math.min(deviation2D, deviation3D * 1.1);
+                
+                // Store movement history for jitter analysis
+                if (!fingerMovementHistory[fingerLandmark]) {
+                    fingerMovementHistory[fingerLandmark] = [];
+                }
+                
+                fingerMovementHistory[fingerLandmark].push({
+                    deviation: finalDeviation,
+                    timestamp: currentTime,
+                    position: { x: currentTip.x, y: currentTip.y, z: currentTip.z }
+                });
+                
+                // Keep only recent history (last 2 seconds)
+                const cutoffTime = currentTime - 2000;
+                fingerMovementHistory[fingerLandmark] = fingerMovementHistory[fingerLandmark]
+                    .filter(entry => entry.timestamp > cutoffTime);
+                
+                // Analyze this finger's independence
+                if (!isTargetFinger) {
+                    // NON-TARGET FINGER ANALYSIS
+                    
+                    // 1. Static Deviation Penalty
+                    // Small movements are acceptable, larger ones indicate poor control
+                    let deviationPenalty = 0;
+                    if (finalDeviation > 0.03) { // 3cm threshold for acceptable "drift"
+                        deviationPenalty = Math.pow((finalDeviation - 0.03) * 100, 1.5); // Exponential penalty
+                    }
+                    
+                    // 2. Movement Jitter Analysis
+                    let jitterPenalty = 0;
+                    if (fingerMovementHistory[fingerLandmark].length >= 5) {
+                        const recentMovements = fingerMovementHistory[fingerLandmark].slice(-10);
+                        const movementVariations = [];
+                        
+                        for (let i = 1; i < recentMovements.length; i++) {
+                            const variation = Math.abs(recentMovements[i].deviation - recentMovements[i-1].deviation);
+                            movementVariations.push(variation);
+                        }
+                        
+                        const avgVariation = movementVariations.reduce((sum, v) => sum + v, 0) / movementVariations.length;
+                        jitterPenalty = avgVariation * 200; // Penalty for jittery movement
+                    }
+                    
+                    // 3. Proximity to thumb penalty (existing logic but refined)
+                    const thumbTip = landmarks[FINGER_LANDMARKS.THUMB_TIP];
+                    const thumbDistance = Math.sqrt(
+                        Math.pow(currentTip.x - thumbTip.x, 2) +
+                        Math.pow(currentTip.y - thumbTip.y, 2)
+                    );
+                    
+                    let proximityPenalty = 0;
+                    if (thumbDistance < 0.12) { // Very close to thumb
+                        proximityPenalty = (0.12 - thumbDistance) * 150; // Strong penalty
+                    }
+                    
+                    // 4. Trend Analysis - is finger moving toward targets?
+                    let trendPenalty = 0;
+                    if (fingerMovementHistory[fingerLandmark].length >= 3) {
+                        const recent = fingerMovementHistory[fingerLandmark].slice(-3);
+                        const isGettingWorse = recent[2].deviation > recent[0].deviation + 0.01;
+                        if (isGettingWorse) {
+                            trendPenalty = 10; // Penalty for deteriorating control
+                        }
+                    }
+                    
+                    const totalFingerPenalty = deviationPenalty + jitterPenalty + proximityPenalty + trendPenalty;
+                    totalIndependenceViolations += totalFingerPenalty;
+                    maxDeviation = Math.max(maxDeviation, finalDeviation);
+                    
+                    fingerAnalysis[fingerLandmark] = {
+                        isTarget: false,
+                        deviation: finalDeviation,
+                        deviationPenalty: deviationPenalty,
+                        jitterPenalty: jitterPenalty,
+                        proximityPenalty: proximityPenalty,
+                        trendPenalty: trendPenalty,
+                        totalPenalty: totalFingerPenalty,
+                        thumbDistance: thumbDistance
+                    };
+                    
+                } else {
+                    // TARGET FINGER ANALYSIS - minimal tracking
+                    fingerAnalysis[fingerLandmark] = {
+                        isTarget: true,
+                        deviation: finalDeviation,
+                        totalPenalty: 0
+                    };
+                }
+            });
+            
+            // Calculate comprehensive independence score
+            // Start with perfect score and subtract violations
+            let independenceScore = 100;
+            
+            // Main penalty from violations
+            independenceScore -= Math.min(totalIndependenceViolations, 95); // Cap at 95% penalty
+            
+            // Bonus for exceptional control (very small movements)
+            if (maxDeviation < 0.015) { // Less than 1.5cm max movement
+                independenceScore += 5; // Bonus for exceptional control
+            }
+            
+            // Floor at 0
+            independenceScore = Math.max(0, independenceScore);
+            
+            // Store detailed analysis
+            const analysisEntry = {
+                timestamp: currentTime - taskStartBaseline,
+                independenceScore: independenceScore,
+                totalViolations: totalIndependenceViolations,
+                maxDeviation: maxDeviation,
+                fingerDetails: fingerAnalysis,
+                requiredFingers: Array.from(requiredFingersSet)
+            };
+            
+            independenceAnalysisData.push(analysisEntry);
+            
+            return {
+                score: independenceScore,
+                details: analysisEntry,
+                violations: totalIndependenceViolations,
+                maxDeviation: maxDeviation
+            };
         }
 
         // Check if the correct hand for this trial is visible
@@ -1151,106 +1345,101 @@
             });
         }
 
-        function processFingerCombination(landmarks, canvasElement) {
-            if (!currentCombination) return;
+function processFingerCombination(landmarks, canvasElement) {
+    if (!currentCombination) return;
 
-            const thumbTip = landmarks[FINGER_LANDMARKS.THUMB_TIP];
-            const currentlyTouching = new Set();
+    const thumbTip = landmarks[FINGER_LANDMARKS.THUMB_TIP];
+    const currentlyTouching = new Set();
 
-            // Enhanced detection with multiple frame validation
-            const allFingerTips = [FINGER_LANDMARKS.INDEX_TIP, FINGER_LANDMARKS.MIDDLE_TIP, 
-                                 FINGER_LANDMARKS.RING_TIP, FINGER_LANDMARKS.PINKY_TIP];
+    // Enhanced detection with multiple frame validation
+    const allFingerTips = [FINGER_LANDMARKS.INDEX_TIP, FINGER_LANDMARKS.MIDDLE_TIP, 
+                         FINGER_LANDMARKS.RING_TIP, FINGER_LANDMARKS.PINKY_TIP];
 
-            // Track finger independence - detect unwanted movements in non-target fingers
-            const requiredFingers = new Set(currentCombination.fingers);
-            allFingerTips.forEach(fingerLandmark => {
-                const fingerTip = landmarks[fingerLandmark];
-                
-                // Enhanced distance calculation with better weighting
-                const distance2D = Math.sqrt(
-                    Math.pow((thumbTip.x - fingerTip.x), 2) +
-                    Math.pow((thumbTip.y - fingerTip.y), 2)
-                );
+    // Track finger touches (existing logic)
+    allFingerTips.forEach(fingerLandmark => {
+        const fingerTip = landmarks[fingerLandmark];
+        
+        const distance2D = Math.sqrt(
+            Math.pow((thumbTip.x - fingerTip.x), 2) +
+            Math.pow((thumbTip.y - fingerTip.y), 2)
+        );
 
-                const distance3D = Math.sqrt(
-                    Math.pow((thumbTip.x - fingerTip.x), 2) +
-                    Math.pow((thumbTip.y - fingerTip.y), 2) +
-                    Math.pow((thumbTip.z - fingerTip.z) * 0.2, 2) // Reduced z-weight for stability
-                );
+        const distance3D = Math.sqrt(
+            Math.pow((thumbTip.x - fingerTip.x), 2) +
+            Math.pow((thumbTip.y - fingerTip.y), 2) +
+            Math.pow((thumbTip.z - fingerTip.z) * 0.2, 2)
+        );
 
-                // Use the more reliable measure with preference for 2D
-                const distance = Math.min(distance2D, distance3D * 1.1); // Slight preference for 2D
+        const distance = Math.min(distance2D, distance3D * 1.1);
 
-                if (distance < TOUCH_THRESHOLD) {
-                    currentlyTouching.add(fingerLandmark);
-                }
-
-                // Track unwanted movements in non-target fingers (slightly more forgiving)
-                if (!requiredFingers.has(fingerLandmark) && distance < 0.14) {
-                    nonTargetFingerMovements++;
-                }
-            });
-
-            // Store finger position data for analysis
-            fingerPositionData.push({
-                timestamp: Date.now() - combinationStartTime,
-                fingerPositions: allFingerTips.map(landmark => ({
-                    landmark: landmark,
-                    distanceFromThumb: Math.sqrt(
-                        Math.pow((thumbTip.x - landmarks[landmark].x), 2) +
-                        Math.pow((thumbTip.y - landmarks[landmark].y), 2)
-                    ),
-                    isTarget: requiredFingers.has(landmark),
-                    isTouching: currentlyTouching.has(landmark)
-                }))
-            });
-
-            // Store detection frame data for validation
-            detectionFrames.push({
-                timestamp: Date.now(),
-                touching: new Set(currentlyTouching)
-            });
-
-            // Keep only recent frames (last 150ms)
-            const cutoffTime = Date.now() - 150;
-            detectionFrames = detectionFrames.filter(frame => frame.timestamp > cutoffTime);
-
-            // Validate touch with frame consistency
-            const validatedTouching = validateTouchDetection(currentlyTouching);
-
-            // Track wrong touches
-            validatedTouching.forEach(finger => {
-                if (!requiredFingers.has(finger) && !touchingFingers.has(finger)) {
-                    wrongTouchCount++;
-                }
-            });
-
-            // Draw finger visualizations with feedback
-            drawFingerVisualization(landmarks, canvasElement, validatedTouching);
-
-            // Check if the correct combination is being touched
-            const correctCombination = 
-                validatedTouching.size === requiredFingers.size &&
-                [...validatedTouching].every(finger => requiredFingers.has(finger)) &&
-                requiredFingers.size > 0; // Ensure it's not an empty combination
-
-            // Only process completion if not already completed
-            if (!combinationCompleted) {
-                if (correctCombination && validatedTouching.size === requiredFingers.size) {
-                    const currentTime = Date.now();
-                    if (currentTime - lastCorrectTime > 400) { // Reduced debounce for faster response
-                        lastCorrectTime = currentTime;
-                        combinationCompleted = true;
-                        completedFingers = new Set(requiredFingers); // Store completed fingers
-                        setTimeout(() => {
-                            nextCombination();
-                        }, 200);
-                    }
-                }
-            }
-
-            touchingFingers = validatedTouching;
+        if (distance < TOUCH_THRESHOLD) {
+            currentlyTouching.add(fingerLandmark);
         }
+    });
+
+    // TRUE FINGER INDEPENDENCE ANALYSIS
+    const independenceAnalysis = analyzeFingerIndependence(landmarks, currentCombination.fingers);
+    
+    // Store enhanced finger position data
+    fingerPositionData.push({
+        timestamp: Date.now() - combinationStartTime,
+        fingerPositions: allFingerTips.map(landmark => ({
+            landmark: landmark,
+            distanceFromThumb: Math.sqrt(
+                Math.pow((thumbTip.x - landmarks[landmark].x), 2) +
+                Math.pow((thumbTip.y - landmarks[landmark].y), 2)
+            ),
+            isTarget: currentCombination.fingers.includes(landmark),
+            isTouching: currentlyTouching.has(landmark)
+        })),
+        independenceAnalysis: independenceAnalysis.details
+    });
+
+    // Store detection frame data for validation (existing logic)
+    detectionFrames.push({
+        timestamp: Date.now(),
+        touching: new Set(currentlyTouching)
+    });
+
+    const cutoffTime = Date.now() - 150;
+    detectionFrames = detectionFrames.filter(frame => frame.timestamp > cutoffTime);
+
+    const validatedTouching = validateTouchDetection(currentlyTouching);
+
+    // Track wrong touches (existing logic)
+    const requiredFingers = new Set(currentCombination.fingers);
+    validatedTouching.forEach(finger => {
+        if (!requiredFingers.has(finger) && !touchingFingers.has(finger)) {
+            wrongTouchCount++;
+        }
+    });
+
+    // Draw finger visualizations with feedback (existing logic)
+    drawFingerVisualization(landmarks, canvasElement, validatedTouching);
+
+    // Check if the correct combination is being touched (existing logic)
+    const correctCombination = 
+        validatedTouching.size === requiredFingers.size &&
+        [...validatedTouching].every(finger => requiredFingers.has(finger)) &&
+        requiredFingers.size > 0;
+
+    // Only process completion if not already completed (existing logic)
+    if (!combinationCompleted) {
+        if (correctCombination && validatedTouching.size === requiredFingers.size) {
+            const currentTime = Date.now();
+            if (currentTime - lastCorrectTime > 400) {
+                lastCorrectTime = currentTime;
+                combinationCompleted = true;
+                completedFingers = new Set(requiredFingers);
+                setTimeout(() => {
+                    nextCombination();
+                }, 200);
+            }
+        }
+    }
+
+    touchingFingers = validatedTouching;
+}
 
         function validateTouchDetection(currentTouching) {
             // Require detection in at least MIN_DETECTION_FRAMES recent frames
@@ -1360,131 +1549,198 @@
             });
         }
 
-        function nextCombination() {
-            const completionTime = Date.now() - combinationStartTime;
-            const fingerCount = currentCombination.fingers.length;
-            
-            // === ACCURACY SCORE (Most Important) ===
-            // Perfect accuracy is crucial - harsh penalties for mistakes
-            let accuracyScore = 100;
-            if (wrongTouchCount > 0) {
-                // First mistake: -20 points, each additional: -15 points
-                accuracyScore = Math.max(0, 100 - (20 + (wrongTouchCount - 1) * 15));
-            }
-            
-            // === SPEED SCORE (Difficulty-Adjusted) ===
-            // Different expectations based on task complexity
-            let baselineTime, excellentTime;
-            switch(fingerCount) {
-                case 1: // Single finger
-                    excellentTime = 600;   // 0.6s = excellent
-                    baselineTime = 1200;   // 1.2s = baseline
-                    break;
-                case 2: // Two fingers  
-                    excellentTime = 800;   // 0.8s = excellent
-                    baselineTime = 1600;   // 1.6s = baseline
-                    break;
-                case 3: // Three fingers
-                    excellentTime = 1000;  // 1.0s = excellent  
-                    baselineTime = 2000;   // 2.0s = baseline
-                    break;
-                case 4: // Four fingers
-                    excellentTime = 1200;  // 1.2s = excellent
-                    baselineTime = 2400;   // 2.4s = baseline
-                    break;
-                default:
-                    excellentTime = 800;
-                    baselineTime = 1600;
-            }
-            
-            let speedScore = 100;
-            if (completionTime > excellentTime) {
-                // Linear penalty between excellent and baseline time
-                const penaltyRange = baselineTime - excellentTime;
-                const overtime = completionTime - excellentTime;
-                speedScore = Math.max(0, 100 - (overtime / penaltyRange) * 60); // Max 60 point penalty
-            }
-            
-            // === INDEPENDENCE SCORE (Fine Motor Control) ===
-            // Penalty for unwanted finger movements (shows lack of control)
-            const independenceScore = Math.max(0, 100 - (nonTargetFingerMovements * 8)); // 8 points per unwanted movement
-            
-            // === DIFFICULTY BONUS ===
-            // Bonus for successfully completing harder tasks
-            const difficultyMultiplier = 1 + (fingerCount - 1) * 0.05; // 5% bonus per additional finger
-            
-            // === FINAL RANKING SCORE ===
-            // Accuracy dominates (60%), Speed secondary (25%), Independence tertiary (15%)
-            let baseScore = (accuracyScore * 0.60) + (speedScore * 0.25) + (independenceScore * 0.15);
-            
-            // Apply difficulty bonus only if performance is good (accuracy >= 85%)
-            let finalScore = baseScore;
-            if (accuracyScore >= 85) {
-                finalScore = baseScore * difficultyMultiplier;
-            }
-            
-            // === CONSISTENCY CHECK ===
-            // If someone has perfect accuracy and good speed, they should always rank higher
-            // than someone with mistakes, regardless of how fast the mistake-maker is
-            if (accuracyScore === 100 && speedScore >= 70) {
-                finalScore += 10; // Consistency bonus for accurate + reasonably fast
-            }
+function nextCombination() {
+    const completionTime = Date.now() - combinationStartTime;
+    const fingerCount = currentCombination.fingers.length;
+    
+    // === ACCURACY SCORE (Most Important) ===
+    let accuracyScore = 100;
+    if (wrongTouchCount > 0) {
+        accuracyScore = Math.max(0, 100 - (20 + (wrongTouchCount - 1) * 15));
+    }
+    
+    // === SPEED SCORE (Difficulty-Adjusted) ===
+    let baselineTime, excellentTime;
+    switch(fingerCount) {
+        case 1:
+            excellentTime = 600;
+            baselineTime = 1200;
+            break;
+        case 2:
+            excellentTime = 800;
+            baselineTime = 1600;
+            break;
+        case 3:
+            excellentTime = 1000;
+            baselineTime = 2000;
+            break;
+        case 4:
+            excellentTime = 1200;
+            baselineTime = 2400;
+            break;
+        default:
+            excellentTime = 800;
+            baselineTime = 1600;
+    }
+    
+    let speedScore = 100;
+    if (completionTime > excellentTime) {
+        const penaltyRange = baselineTime - excellentTime;
+        const overtime = completionTime - excellentTime;
+        speedScore = Math.max(0, 100 - (overtime / penaltyRange) * 60);
+    }
+    
+    // === TRUE FINGER INDEPENDENCE SCORE ===
+    let independenceScore = 100;
+    let independenceDetails = {
+        avgScore: 100,
+        minScore: 100,
+        totalViolations: 0,
+        maxDeviation: 0,
+        stabilityScore: 100
+    };
+    
+    if (independenceAnalysisData.length > 0) {
+        // Calculate comprehensive independence metrics
+        const scores = independenceAnalysisData.map(entry => entry.independenceScore);
+        const violations = independenceAnalysisData.map(entry => entry.totalViolations);
+        const deviations = independenceAnalysisData.map(entry => entry.maxDeviation);
         
-            const result = {
-                handIndex: currentHandIndex,
-                hand: trialConditions[currentHandIndex].hand,
-                combinationIndex: currentCombinationIndex,
-                combination: currentCombination,
-                timestamp: new Date().toISOString(),
-                completionTime: completionTime,
-                wrongTouchCount: wrongTouchCount,
-                nonTargetMovements: nonTargetFingerMovements,
-                accuracyScore: accuracyScore,
-                speedScore: speedScore,
-                independenceScore: independenceScore,
-                overallScore: finalScore,
-                baseScore: baseScore,
-                difficultyMultiplier: difficultyMultiplier,
-                difficulty: fingerCount,
-                fingerPositionData: fingerPositionData.slice(),
-                // Debug info
-                debugInfo: {
-                    excellentTime: excellentTime,
-                    baselineTime: baselineTime,
-                    actualTime: completionTime,
-                    appliedDifficultyBonus: accuracyScore >= 85
-                }
-            };
-            
-            allResults.push(result);
-            console.log("Result added - Final Score:", finalScore.toFixed(1), "Base:", baseScore.toFixed(1), "Accuracy:", accuracyScore, "Speed:", speedScore.toFixed(1), "Independence:", independenceScore.toFixed(1));
+        // Average independence throughout the task
+        const avgIndependenceScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
         
-            currentCombinationIndex++;
-            debugProgress();
+        // Minimum independence (worst moment)
+        const minIndependenceScore = Math.min(...scores);
         
-            if (currentCombinationIndex >= FINGER_COMBINATIONS.length) {
-                console.log("Finished all combinations for hand:", trialConditions[currentHandIndex].hand);
-                currentHandIndex++;
-                currentCombinationIndex = 0;
+        // Total violations accumulated
+        const totalViolations = violations.reduce((sum, v) => sum + v, 0);
         
-                if (currentHandIndex >= trialConditions.length) {
-                    console.log("ASSESSMENT COMPLETE! Calling finishAssessment...");
-                    setTimeout(() => {
-                        finishAssessment();
-                    }, 100);
-                } else {
-                    console.log("Starting next hand:", trialConditions[currentHandIndex].hand);
-                    stopRecording();
-                    updateConditionUI();
-                }
-            } else {
-                console.log("Next combination for same hand");
-                setTimeout(() => {
-                    showNextCombination();
-                }, 1000);
-            }
+        // Maximum deviation observed
+        const maxDeviation = Math.max(...deviations);
+        
+        // Stability analysis - how consistent was the control?
+        const scoreVariance = scores.reduce((sum, score) => {
+            return sum + Math.pow(score - avgIndependenceScore, 2);
+        }, 0) / scores.length;
+        const stabilityScore = Math.max(0, 100 - Math.sqrt(scoreVariance));
+        
+        // Final independence score calculation
+        // Weight: Average performance (50%) + Worst moment (30%) + Stability (20%)
+        independenceScore = (avgIndependenceScore * 0.5) + (minIndependenceScore * 0.3) + (stabilityScore * 0.2);
+        
+        // Additional penalties for severe violations
+        if (totalViolations > 50) {
+            independenceScore -= Math.min(20, (totalViolations - 50) / 5); // Extra penalty for excessive violations
         }
+        
+        // Bonus for exceptional control
+        if (maxDeviation < 0.01 && avgIndependenceScore > 95) {
+            independenceScore += 5; // Exceptional control bonus
+        }
+        
+        independenceScore = Math.max(0, Math.min(100, independenceScore));
+        
+        independenceDetails = {
+            avgScore: avgIndependenceScore,
+            minScore: minIndependenceScore,
+            totalViolations: totalViolations,
+            maxDeviation: maxDeviation,
+            stabilityScore: stabilityScore,
+            finalScore: independenceScore,
+            dataPoints: independenceAnalysisData.length
+        };
+    }
+    
+    // === DIFFICULTY BONUS ===
+    const difficultyMultiplier = 1 + (fingerCount - 1) * 0.05;
+    
+    // === FINAL RANKING SCORE ===
+    // Enhanced weighting: Accuracy (50%) > Independence (30%) > Speed (20%)
+    // Independence is now much more important since it's properly measured
+    let baseScore = (accuracyScore * 0.5) + (independenceScore * 0.3) + (speedScore * 0.2);
+    
+    // Apply difficulty bonus only if performance is good
+    let finalScore = baseScore;
+    if (accuracyScore >= 85 && independenceScore >= 70) {
+        finalScore = baseScore * difficultyMultiplier;
+    }
+    
+    // Consistency bonus for excellent across-the-board performance
+    if (accuracyScore === 100 && independenceScore >= 90 && speedScore >= 70) {
+        finalScore += 8; // Comprehensive excellence bonus
+    }
 
+    const result = {
+        handIndex: currentHandIndex,
+        hand: trialConditions[currentHandIndex].hand,
+        combinationIndex: currentCombinationIndex,
+        combination: currentCombination,
+        timestamp: new Date().toISOString(),
+        completionTime: completionTime,
+        wrongTouchCount: wrongTouchCount,
+        
+        // Enhanced independence data
+        trueIndependenceScore: independenceScore,
+        independenceDetails: independenceDetails,
+        independenceAnalysisData: independenceAnalysisData.slice(), // Full analysis data
+        
+        // Legacy field for compatibility (using true independence now)
+        nonTargetMovements: independenceDetails.totalViolations,
+        
+        // Scores
+        accuracyScore: accuracyScore,
+        speedScore: speedScore,
+        independenceScore: independenceScore, // Now the true independence score
+        overallScore: finalScore,
+        baseScore: baseScore,
+        difficultyMultiplier: difficultyMultiplier,
+        difficulty: fingerCount,
+        fingerPositionData: fingerPositionData.slice(),
+        
+        // Debug info
+        debugInfo: {
+            excellentTime: excellentTime,
+            baselineTime: baselineTime,
+            actualTime: completionTime,
+            appliedDifficultyBonus: accuracyScore >= 85 && independenceScore >= 70,
+            independenceDataPoints: independenceAnalysisData.length
+        }
+    };
+    
+    allResults.push(result);
+    console.log(`Result added - Final Score: ${finalScore.toFixed(1)} | Accuracy: ${accuracyScore} | Speed: ${speedScore.toFixed(1)} | Independence: ${independenceScore.toFixed(1)} (${independenceDetails.dataPoints} analysis points)`);
+
+    // Reset for next combination
+    baselineFingerPositions = {};
+    fingerMovementHistory = {};
+    independenceAnalysisData = [];
+    taskStartBaseline = null;
+
+    currentCombinationIndex++;
+    debugProgress();
+
+    if (currentCombinationIndex >= FINGER_COMBINATIONS.length) {
+        console.log("Finished all combinations for hand:", trialConditions[currentHandIndex].hand);
+        currentHandIndex++;
+        currentCombinationIndex = 0;
+
+        if (currentHandIndex >= trialConditions.length) {
+            console.log("ASSESSMENT COMPLETE! Calling finishAssessment...");
+            setTimeout(() => {
+                finishAssessment();
+            }, 100);
+        } else {
+            console.log("Starting next hand:", trialConditions[currentHandIndex].hand);
+            stopRecording();
+            updateConditionUI();
+        }
+    } else {
+        console.log("Next combination for same hand");
+        setTimeout(() => {
+            showNextCombination();
+        }, 1000);
+    }
+}
         function getDifficultyScore(combination) {
             // Assign difficulty scores based on complexity
             const fingerCount = combination.fingers.length;
@@ -1500,15 +1756,23 @@
             currentCombination = FINGER_COMBINATIONS[currentCombinationIndex];
             combinationStartTime = Date.now();
             wrongTouchCount = 0;
-            nonTargetFingerMovements = 0;
             detectionFrames = [];
             fingerPositionData = [];
-            combinationCompleted = false; // Reset completion state
-            completedFingers = new Set(); // Reset completed fingers
+            combinationCompleted = false;
+            completedFingers = new Set();
+            
+            // Reset enhanced independence tracking
+            baselineFingerPositions = {};
+            fingerMovementHistory = {};
+            independenceAnalysisData = [];
+            taskStartBaseline = null;
+            nonTargetFingerMovements = 0; // Legacy counter, kept for compatibility
             
             // Update UI
             document.getElementById('progress-display').textContent = `${currentCombinationIndex + 1}/15`;
             document.getElementById('combination-text').textContent = currentCombination.name;
+            
+            console.log(`Starting combination: ${currentCombination.name} (${currentCombination.fingers.length} fingers)`);
         }
 
         function startRecording() {
