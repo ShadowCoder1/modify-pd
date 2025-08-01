@@ -935,6 +935,9 @@
         let completedFingers = new Set();
         let fingerPositionData = [];
         let nonTargetFingerMovements = 0;
+        let baselineFingerPositions = {};
+        let cumulativeFingerMovement = {};
+        let independenceFrameCount = 0;
 
         // Enhanced touch detection parameters
         const TOUCH_THRESHOLD = 0.08; // Slightly more forgiving threshold
@@ -1185,10 +1188,36 @@
                     currentlyTouching.add(fingerLandmark);
                 }
 
-                // Track unwanted movements in non-target fingers (slightly more forgiving)
-                if (!requiredFingers.has(fingerLandmark) && distance < 0.14) {
-                    nonTargetFingerMovements++;
+// Track real finger independence - measure unwanted movement in non-target fingers
+        if (!requiredFingers.has(fingerLandmark)) {
+            // Initialize baseline if this is early in the task (first 500ms)
+            const taskTime = Date.now() - combinationStartTime;
+            if (taskTime < 500 && !baselineFingerPositions[fingerLandmark]) {
+                baselineFingerPositions[fingerLandmark] = {
+                    x: fingerTip.x,
+                    y: fingerTip.y,
+                    z: fingerTip.z
+                };
+                cumulativeFingerMovement[fingerLandmark] = 0;
+            }
+            
+            // Measure movement from baseline for non-target fingers
+            if (baselineFingerPositions[fingerLandmark]) {
+                const baseline = baselineFingerPositions[fingerLandmark];
+                const movementFromBaseline = Math.sqrt(
+                    Math.pow(fingerTip.x - baseline.x, 2) +
+                    Math.pow(fingerTip.y - baseline.y, 2) +
+                    Math.pow((fingerTip.z - baseline.z) * 0.3, 2) // Weight Z less
+                );
+                
+                // Accumulate unwanted movement (anything > 0.03 is considered unwanted movement)
+                if (movementFromBaseline > 0.03) {
+                    cumulativeFingerMovement[fingerLandmark] += movementFromBaseline;
                 }
+            }
+        }
+        
+        independenceFrameCount++;
             });
 
             // Store finger position data for analysis
@@ -1362,8 +1391,11 @@
 
         function nextCombination() {
             // Calculate finger independence score
-            const independenceScore = Math.max(0, 100 - (nonTargetFingerMovements / 10)); // Penalty for unwanted movements
-            
+            // Calculate true finger independence score based on unwanted movements
+            const totalUnwantedMovement = Object.values(cumulativeFingerMovement).reduce((sum, movement) => sum + movement, 0);
+            const avgUnwantedMovement = independenceFrameCount > 0 ? totalUnwantedMovement / independenceFrameCount : 0;
+            const independenceScore = Math.max(0, 100 - (avgUnwantedMovement * 500)); // Scale penalty appropriately// Penalty for unwanted movements
+                        
             // Calculate comprehensive result metrics
             const completionTime = Date.now() - combinationStartTime;
             const accuracyScore = Math.max(0, 100 - (wrongTouchCount * 15)); // 15% penalty per wrong touch
@@ -1434,14 +1466,18 @@
             nonTargetFingerMovements = 0;
             detectionFrames = [];
             fingerPositionData = [];
-            combinationCompleted = false; // Reset completion state
-            completedFingers = new Set(); // Reset completed fingers
+            combinationCompleted = false;
+            completedFingers = new Set();
+            
+            // Reset finger independence tracking
+            baselineFingerPositions = {};
+            cumulativeFingerMovement = {};
+            independenceFrameCount = 0;
             
             // Update UI
             document.getElementById('progress-display').textContent = `${currentCombinationIndex + 1}/15`;
             document.getElementById('combination-text').textContent = currentCombination.name;
         }
-
         function startRecording() {
             if (!handDetected) {
                 alert('Please position your hand in view of the camera before starting.');
@@ -1671,16 +1707,22 @@ function finishAssessment() {
                 }
         
                 
-        function createRanking(results) {
-            return results
-                .map(result => {
-                    // Advanced ranking score: accuracy (40%) + speed (30%) + independence (30%)
-                    const rankingScore = result.overallScore;
-                    return { ...result, rankingScore };
-                })
-                .sort((a, b) => b.rankingScore - a.rankingScore);
-        }
-
+function createRanking(results) {
+    return results
+        .map(result => {
+            // Base performance score
+            const baseScore = (result.accuracyScore * 0.4) + (result.speedScore * 0.3) + (result.independenceScore * 0.3);
+            
+            // Neurologically-informed difficulty weights (much more modest)
+            const fingerCount = result.combination.fingers.length;
+            const difficultyWeight = 1.0 + (fingerCount - 1) * 0.05; // 1.0, 1.05, 1.10, 1.15 instead of 1.67x-2.67x
+            
+            const rankingScore = baseScore * difficultyWeight;
+            return { ...result, rankingScore };
+        })
+        .sort((a, b) => b.rankingScore - a.rankingScore);
+}
+        
 function generateResultsHTML(rightRanking, leftRanking, overallStats) {
     console.log("Generating compact results HTML...");
     
